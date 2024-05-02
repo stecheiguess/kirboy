@@ -7,6 +7,8 @@ struct Registers {
     e: u8,
     h: u8,
     l: u8,
+    pc: u16,
+    sp: u16,
 }
 
 impl Registers {
@@ -25,6 +27,8 @@ impl Registers {
             e: 0,
             h: 0,
             l: 0,
+            pc: 0,
+            sp: 0,
         }
     }
 
@@ -120,6 +124,17 @@ impl Memory {
     fn write_byte(&mut self, value: u8, address: u16) {
         self.ram[address as usize] = value;
     }
+
+    fn read_word(&self, address: u16) -> u16 {
+        // little endian order of bits
+        (self.read_byte(address) as u16) | ((self.read_byte(address + 1) as u16) << 8)
+    }
+
+    fn write_word(&mut self, value: u16, address: u16) {
+        // write in little endian
+        self.write_byte((value & 0x00ff) as u8, address);
+        self.write_byte((value >> 8) as u8, address + 1);
+    }
 }
 
 // cpu
@@ -146,8 +161,17 @@ impl CPU {
             0x83 => { self.add(self.registers.e) }
             0x84 => { self.add(self.registers.h) }
             0x85 => { self.add(self.registers.l) }
-            0x86 => { self.add(self.registers.b) }
+            0x86 => { self.add(self.memory.read_byte(self.registers.get_hl())) }
             0x87 => { self.add(self.registers.a) }
+            // add carry
+            0x88 => { self.adc(self.registers.b) }
+            0x89 => { self.adc(self.registers.c) }
+            0x8a => { self.adc(self.registers.d) }
+            0x8b => { self.adc(self.registers.e) }
+            0x8c => { self.adc(self.registers.h) }
+            0x8d => { self.adc(self.registers.l) }
+            0x8e => { self.adc(self.memory.read_byte(self.registers.get_hl())) }
+            0x8f => { self.adc(self.registers.a) }
             _ => (),
         }
     }
@@ -240,9 +264,15 @@ impl CPU {
         self.registers.f.half_carry = self.registers.a & 0xf < value & 0xf;
     }
 
-    fn ld(&mut self, reg1: &mut u8, reg2: &u8) {
-        *reg1 = *reg2;
+    fn ld(&mut self, register: &mut u8, value: u8) {
+        *register = value;
     }
+
+    fn ld16(&mut self, register: &mut u16, value: u16) {
+        *register = value;
+    }
+
+    // Implementing INC and DEC
 }
 
 /*use winit::{ event_loop::EventLoop, window::{ Window, WindowBuilder } };
@@ -268,24 +298,26 @@ fn test() {
 
 fn main() {
     // Read boot-rom file
+    let boot = std::fs::read("boot.bin").unwrap();
+
+    let mut CPU = CPU::new();
+
+    for (position, &byte) in boot.iter().enumerate() {
+        println!("{:X?}", byte);
+        CPU.memory.write_byte(byte, position as u16);
+    }
+
+    //println!("{:?}", CPU.memory.ram)
+
+    /* 
     let bytes = std::fs::read("tetris.gb").unwrap();
 
     let mut title = String::new();
-    let mut memory = Memory::new();
 
     // grab title
     for &byte in &bytes[0x0134..0x0143] {
         title.push(byte as char);
     }
 
-    println!("{}", title);
-
-    // writing rom to ram
-    if bytes[0x0147] == 0 {
-        for (position, &byte) in bytes.iter().enumerate() {
-            memory.write_byte(byte, position as u16);
-        }
-    }
-
-    println!("{:?}", memory.read_byte(0x0))
+    println!("{}", title);*/
 }
