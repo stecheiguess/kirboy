@@ -4,6 +4,14 @@ version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[features]
+optimize = ["log/release_max_level_warn"]
+default = ["optimize"]
 
 [dependencies]
-winit = "0.28.0"
+env_logger = "0.10"
+error-iter = "0.4"
+log = "0.4"
+pixels = "0.13.0"
+winit = "0.28"
+winit_input_helper = "0.14"

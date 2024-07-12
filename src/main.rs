@@ -112,9 +112,7 @@ struct Memory {
 
 impl Memory {
     pub fn new() -> Memory {
-        Memory {
-            ram: [0; 0x10000],
-        }
+        Memory { ram: [0; 0x10000] }
     }
 
     fn read_byte(&self, address: u16) -> u8 {
@@ -140,7 +138,6 @@ impl Memory {
 // cpu
 struct CPU {
     registers: Registers,
-    pc: u16,
     memory: Memory,
 }
 
@@ -149,29 +146,69 @@ impl CPU {
         CPU {
             registers: Registers::new(),
             memory: Memory::new(),
-            pc: 0,
         }
     }
 
-    fn execute(&mut self, opcode: u8) {
+    fn fetch(&mut self) -> u8 {
+        let byte = self.memory.read_byte(self.registers.pc);
+        self.registers.pc = self.registers.pc.wrapping_add(1);
+        byte
+    }
+
+    fn execute(&mut self) {
+        let opcode = self.fetch();
         match opcode {
-            0x80 => { self.add(self.registers.b) }
-            0x81 => { self.add(self.registers.c) }
-            0x82 => { self.add(self.registers.d) }
-            0x83 => { self.add(self.registers.e) }
-            0x84 => { self.add(self.registers.h) }
-            0x85 => { self.add(self.registers.l) }
-            0x86 => { self.add(self.memory.read_byte(self.registers.get_hl())) }
-            0x87 => { self.add(self.registers.a) }
+            0x31 => {
+                self.registers.sp == self.memory.read_word(self.registers.pc);
+            }
+
+            0x80 => self.add(self.registers.b),
+            0x81 => self.add(self.registers.c),
+            0x82 => self.add(self.registers.d),
+            0x83 => self.add(self.registers.e),
+            0x84 => self.add(self.registers.h),
+            0x85 => self.add(self.registers.l),
+            0x86 => self.add(self.memory.read_byte(self.registers.get_hl())),
+            0x87 => self.add(self.registers.a),
             // add carry
-            0x88 => { self.adc(self.registers.b) }
-            0x89 => { self.adc(self.registers.c) }
-            0x8a => { self.adc(self.registers.d) }
-            0x8b => { self.adc(self.registers.e) }
-            0x8c => { self.adc(self.registers.h) }
-            0x8d => { self.adc(self.registers.l) }
-            0x8e => { self.adc(self.memory.read_byte(self.registers.get_hl())) }
-            0x8f => { self.adc(self.registers.a) }
+            0x88 => self.adc(self.registers.b),
+            0x89 => self.adc(self.registers.c),
+            0x8a => self.adc(self.registers.d),
+            0x8b => self.adc(self.registers.e),
+            0x8c => self.adc(self.registers.h),
+            0x8d => self.adc(self.registers.l),
+            0x8e => self.adc(self.memory.read_byte(self.registers.get_hl())),
+            0x8f => self.adc(self.registers.a),
+            // sub
+            0x90 => self.sub(self.registers.b),
+            0x91 => self.sub(self.registers.c),
+            0x92 => self.sub(self.registers.d),
+            0x93 => self.sub(self.registers.e),
+            0x94 => self.sub(self.registers.h),
+            0x95 => self.sub(self.registers.l),
+            0x96 => self.sub(self.memory.read_byte(self.registers.get_hl())),
+            0x97 => self.sub(self.registers.a),
+            // sub carry
+            0x98 => self.sbc(self.registers.b),
+            0x99 => self.sbc(self.registers.c),
+            0x9a => self.sbc(self.registers.d),
+            0x9b => self.sbc(self.registers.e),
+            0x9c => self.sbc(self.registers.h),
+            0x9d => self.sbc(self.registers.l),
+            0x9e => self.sbc(self.memory.read_byte(self.registers.get_hl())),
+            0x9f => self.sbc(self.registers.a),
+            // and
+            0xa0 => self.and(self.registers.b),
+            0xa1 => self.and(self.registers.c),
+            0xa2 => self.and(self.registers.d),
+            0xa3 => self.and(self.registers.e),
+            0xa4 => self.and(self.registers.h),
+            0xa5 => self.and(self.registers.l),
+            0xa6 => self.and(self.memory.read_byte(self.registers.get_hl())),
+            0xa7 => self.and(self.registers.a),
+            // xor
+            // or
+            // cp
             _ => (),
         }
     }
@@ -264,13 +301,73 @@ impl CPU {
         self.registers.f.half_carry = self.registers.a & 0xf < value & 0xf;
     }
 
-    fn ld(&mut self, register: &mut u8, value: u8) {
-        *register = value;
+    // functions that change
+    /*
+    fn ld(&self, register: &mut u8) {
+        *register = self.memory.read_byte(self.registers.pc);
+        self.registers.pc = self.registers.pc.wrapping_add(1);
     }
 
-    fn ld16(&mut self, register: &mut u16, value: u16) {
-        *register = value;
+    fn ld16(&self, register: &mut u16) {
+        *register = self.memory.read_word(self.registers.pc);
+        self.registers.pc += 2;
     }
+
+    fn inc(&mut self, register: &mut u8) {
+        *register = register.wrapping_add(1);
+        self.registers.f.zero = *register == 0;
+        self.registers.f.subtract = false;
+        self.registers.f.half_carry = (*register & 0xf) == 0;
+    }
+
+    // swaps lower nibble and higher nibble.
+    fn swap(&mut self, register: &mut u8) {
+        *register = (*register >> 4) | (*register << 4);
+        self.registers.f.zero = *register == 0;
+        self.registers.f.subtract = false;
+        self.registers.f.half_carry = false;
+        self.registers.f.carry = false;
+    }
+
+    // arithmetic/logical left shift.
+    fn sla(&mut self, register: &mut u8) {
+        self.registers.f.carry = (*register >> 7) == 1;
+        *register <<= 1;
+        self.registers.f.zero = *register == 0;
+        self.registers.f.subtract = false;
+        self.registers.f.half_carry = false;
+    }
+
+    //arithmetic right shift.
+    fn sra(&mut self, register: &mut u8) {
+        self.registers.f.carry = (*register & 0x1) == 0x1;
+        *register = (*register & 0x80) | (*register >> 1);
+        self.registers.f.zero = *register == 0;
+        self.registers.f.subtract = false;
+        self.registers.f.half_carry = false;
+    }
+    //logical right shift.
+    fn srl(&mut self, register: &mut u8) {
+        self.registers.f.carry = (*register & 0x1) == 0x1;
+        *register = *register >> 1;
+        self.registers.f.zero = *register == 0;
+        self.registers.f.subtract = false;
+        self.registers.f.half_carry = false;
+    } */
+
+    /*
+        fn inc16(&mut self, register: &mut u16) {
+            *register += 1;
+        }
+
+        fn dec(&mut self, register: &mut u8) {
+            *register += 1;
+        }
+
+        fn dec16(&mut self, register: &mut u16) {
+            *register += 1;
+        }
+    */
 
     // Implementing INC and DEC
 }
@@ -309,7 +406,7 @@ fn main() {
 
     //println!("{:?}", CPU.memory.ram)
 
-    /* 
+    /*
     let bytes = std::fs::read("tetris.gb").unwrap();
 
     let mut title = String::new();
