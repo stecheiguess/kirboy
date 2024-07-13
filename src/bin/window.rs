@@ -18,10 +18,10 @@ const BOX_SIZE: i16 = 64;
 
 /// Representation of the application state. In this example, a box will bounce around the screen.
 struct World {
-    box_x: i16,
+    /*box_x: i16,
     box_y: i16,
     velocity_x: i16,
-    velocity_y: i16,
+    velocity_y: i16,*/
     logo: Vec<u8>,
 }
 
@@ -80,7 +80,7 @@ fn main() -> Result<(), Error> {
             }
 
             // Update internal state and request a redraw
-            world.update();
+            //world.update();
             window.request_redraw();
         }
     });
@@ -97,16 +97,16 @@ impl World {
     /// Create a new `World` instance that can draw a moving box.
     fn new() -> Self {
         Self {
-            box_x: 24,
-            box_y: 16,
-            velocity_x: 1,
-            velocity_y: 1,
+            //box_x: 24,
+            //box_y: 16,
+            //velocity_x: 1,
+            //velocity_y: 1,
             logo: std::fs::read("gbart.bin").unwrap(),
         }
     }
 
     /// Update the `World` internal state; bounce the box around the screen.
-    fn update(&mut self) {
+    /*fn update(&mut self) {
         if self.box_x <= 0 || self.box_x + BOX_SIZE > (WIDTH as i16) {
             self.velocity_x *= -1;
         }
@@ -116,7 +116,7 @@ impl World {
 
         self.box_x += self.velocity_x;
         self.box_y += self.velocity_y;
-    }
+    }*/
 
     /// Draw the `World` state to the frame buffer.
     ///
@@ -124,8 +124,8 @@ impl World {
     fn draw(&self, frame: &mut [u8]) {
         let tile = toTile(&self.logo);
         for (i, pixel) in frame.chunks_exact_mut(4).enumerate() {
-            let x = ((i % (WIDTH as usize)) / 4) as f32;
-            let y = (i / (WIDTH as usize) / 4) as f32;
+            let x = ((i % (WIDTH as usize)) / 8) as f32;
+            let y = (i / (WIDTH as usize) / 8) as f32;
 
             /*
             let inside_the_box =
@@ -146,12 +146,12 @@ impl World {
 
             let rgba = if inside_range {
                 match tile[y as usize][x as usize] {
-                    0 => { [0x00, 0x00, 0x00, 0xff] }
-                    1 => { [0x88, 0x88, 0x88, 0xff] }
-                    2 => { [0xcc, 0xcc, 0xcc, 0xff] }
-                    3 => { [0xff, 0xff, 0xff, 0xff] }
+                    0 => { [0x0f, 0x38, 0x0f, 0xff] }
+                    1 => { [0x30, 0x62, 0x30, 0xff] }
+                    2 => { [0x8b, 0xac, 0x0f, 0xff] }
+                    3 => { [0x9b, 0xbc, 0x0f, 0xff] }
 
-                    _ => { [0x00, 0x00, 0x00, 0xff] }
+                    _ => { [0x0f, 0x38, 0x0f, 0xff] }
                 }
             } else {
                 [0x48, 0xb2, 0xe8, 0xff]
