@@ -173,14 +173,6 @@ impl CPU {
         match opcode {
             0x00 => {}
 
-            0x0c => {
-                self.registers.c += 1;
-            }
-
-            0x0e => {
-                self.registers.c = self.fetch();
-            }
-
             /*0x20 => {
                 //println!("{:?}", self.registers);
                 if self.registers.f.zero == false {
@@ -198,6 +190,18 @@ impl CPU {
                 }
             }*/
 
+            // ld 16 bit
+
+            0x01 => {
+                let word = self.fetch_word();
+                self.registers.set_bc(word)
+            }
+
+            0x11 => {
+                let word = self.fetch_word();
+                self.registers.set_de(word)
+            }
+
             0x21 => {
                 let word = self.fetch_word();
                 self.registers.set_hl(word)
@@ -207,14 +211,23 @@ impl CPU {
                 self.registers.sp = self.fetch_word();
             }
 
+            0x02 => { self.memory.write_byte(self.registers.a, self.registers.get_bc()) }
+
+            0x12 => { self.memory.write_byte(self.registers.a, self.registers.get_de()) }
+
+            0x22 => {
+                self.memory.write_byte(self.registers.a, self.registers.get_hl());
+                println!("{hl:?}", hl = self.registers.get_hl());
+                self.registers.set_hl(self.registers.get_hl() + 1)
+            }
+
             0x32 => {
                 self.memory.write_byte(self.registers.a, self.registers.get_hl());
+                println!("{hl:?}", hl = self.registers.get_hl());
                 self.registers.set_hl(self.registers.get_hl() - 1)
             }
 
-            0x3e => {
-                self.registers.a = self.fetch();
-            }
+            // add 16 bit
 
             // inc
             0x04 => {
@@ -286,6 +299,19 @@ impl CPU {
             0x36 => {
                 let byte = self.fetch();
                 self.memory.write_byte(byte, self.registers.get_hl())
+            }
+
+            0x0e => {
+                self.registers.c = self.fetch();
+            }
+            0x1e => {
+                self.registers.e = self.fetch();
+            }
+            0x2e => {
+                self.registers.l = self.fetch();
+            }
+            0x3e => {
+                self.registers.a = self.fetch();
             }
 
             // ld b
@@ -439,11 +465,19 @@ impl CPU {
                 self.registers.l = self.registers.a;
             }
 
-            0x76 => {
-                panic!("END");
-            }
+            // ld [hl]
 
+            0x70 => { self.memory.write_byte(self.registers.b, self.registers.get_hl()) }
+            0x71 => { self.memory.write_byte(self.registers.c, self.registers.get_hl()) }
+            0x72 => { self.memory.write_byte(self.registers.d, self.registers.get_hl()) }
+            0x73 => { self.memory.write_byte(self.registers.e, self.registers.get_hl()) }
+            0x74 => { self.memory.write_byte(self.registers.h, self.registers.get_hl()) }
+            0x75 => { self.memory.write_byte(self.registers.l, self.registers.get_hl()) }
             0x77 => { self.memory.write_byte(self.registers.a, self.registers.get_hl()) }
+
+            0x76 => {
+                //panic!("END");
+            }
 
             // ld a
             0x78 => {
@@ -640,6 +674,215 @@ impl CPU {
             0x7e => self.bit(7, self.memory.read_byte(self.registers.get_hl())),
             0x7f => self.bit(7, self.registers.a),
 
+            // reset to 0
+
+            0x80 => {
+                self.registers.b = self.res(0, self.registers.b);
+            }
+            0x81 => {
+                self.registers.c = self.res(0, self.registers.c);
+            }
+            0x82 => {
+                self.registers.d = self.res(0, self.registers.d);
+            }
+            0x83 => {
+                self.registers.e = self.res(0, self.registers.e);
+            }
+            0x84 => {
+                self.registers.h = self.res(0, self.registers.h);
+            }
+            0x85 => {
+                self.registers.l = self.res(0, self.registers.l);
+            }
+            0x86 => {
+                let value = self.res(0, self.memory.read_byte(self.registers.get_hl()));
+                self.memory.write_byte(value, self.registers.get_hl())
+            }
+
+            0x87 => {
+                self.registers.a = self.res(0, self.registers.a);
+            }
+            0x88 => {
+                self.registers.b = self.res(1, self.registers.b);
+            }
+            0x89 => {
+                self.registers.c = self.res(1, self.registers.c);
+            }
+            0x8a => {
+                self.registers.d = self.res(1, self.registers.d);
+            }
+            0x8b => {
+                self.registers.e = self.res(1, self.registers.e);
+            }
+            0x8c => {
+                self.registers.h = self.res(1, self.registers.h);
+            }
+            0x8d => {
+                self.registers.l = self.res(1, self.registers.l);
+            }
+            0x8e => {
+                let value = self.res(1, self.memory.read_byte(self.registers.get_hl()));
+                self.memory.write_byte(value, self.registers.get_hl())
+            }
+            0x8f => {
+                self.registers.a = self.res(1, self.registers.a);
+            }
+
+            0x90 => {
+                self.registers.b = self.res(2, self.registers.b);
+            }
+            0x91 => {
+                self.registers.c = self.res(2, self.registers.c);
+            }
+            0x92 => {
+                self.registers.d = self.res(2, self.registers.d);
+            }
+            0x93 => {
+                self.registers.e = self.res(2, self.registers.e);
+            }
+            0x94 => {
+                self.registers.h = self.res(2, self.registers.h);
+            }
+            0x95 => {
+                self.registers.l = self.res(2, self.registers.l);
+            }
+            0x96 => {
+                let value = self.res(2, self.memory.read_byte(self.registers.get_hl()));
+                self.memory.write_byte(value, self.registers.get_hl())
+            }
+
+            0x97 => {
+                self.registers.a = self.res(2, self.registers.a);
+            }
+            0x98 => {
+                self.registers.b = self.res(3, self.registers.b);
+            }
+            0x99 => {
+                self.registers.c = self.res(3, self.registers.c);
+            }
+            0x9a => {
+                self.registers.d = self.res(3, self.registers.d);
+            }
+            0x9b => {
+                self.registers.e = self.res(3, self.registers.e);
+            }
+            0x9c => {
+                self.registers.h = self.res(3, self.registers.h);
+            }
+            0x9d => {
+                self.registers.l = self.res(3, self.registers.l);
+            }
+            0x9e => {
+                let value = self.res(3, self.memory.read_byte(self.registers.get_hl()));
+                self.memory.write_byte(value, self.registers.get_hl())
+            }
+            0x9f => {
+                self.registers.a = self.res(3, self.registers.a);
+            }
+            0xa0 => {
+                self.registers.b = self.res(4, self.registers.b);
+            }
+            0xa1 => {
+                self.registers.c = self.res(4, self.registers.c);
+            }
+            0xa2 => {
+                self.registers.d = self.res(4, self.registers.d);
+            }
+            0xa3 => {
+                self.registers.e = self.res(4, self.registers.e);
+            }
+            0xa4 => {
+                self.registers.h = self.res(4, self.registers.h);
+            }
+            0xa5 => {
+                self.registers.l = self.res(4, self.registers.l);
+            }
+            0xa6 => {
+                let value = self.res(4, self.memory.read_byte(self.registers.get_hl()));
+                self.memory.write_byte(value, self.registers.get_hl())
+            }
+
+            0xa7 => {
+                self.registers.a = self.res(4, self.registers.a);
+            }
+            0xa8 => {
+                self.registers.b = self.res(5, self.registers.b);
+            }
+            0xa9 => {
+                self.registers.c = self.res(5, self.registers.c);
+            }
+            0xaa => {
+                self.registers.d = self.res(5, self.registers.d);
+            }
+            0xab => {
+                self.registers.e = self.res(5, self.registers.e);
+            }
+            0xac => {
+                self.registers.h = self.res(5, self.registers.h);
+            }
+            0xad => {
+                self.registers.l = self.res(5, self.registers.l);
+            }
+            0xae => {
+                let value = self.res(5, self.memory.read_byte(self.registers.get_hl()));
+                self.memory.write_byte(value, self.registers.get_hl())
+            }
+            0xaf => {
+                self.registers.a = self.res(5, self.registers.a);
+            }
+
+            0xb0 => {
+                self.registers.b = self.res(6, self.registers.b);
+            }
+            0xb1 => {
+                self.registers.c = self.res(6, self.registers.c);
+            }
+            0xb2 => {
+                self.registers.d = self.res(6, self.registers.d);
+            }
+            0xb3 => {
+                self.registers.e = self.res(6, self.registers.e);
+            }
+            0xb4 => {
+                self.registers.h = self.res(6, self.registers.h);
+            }
+            0xb5 => {
+                self.registers.l = self.res(6, self.registers.l);
+            }
+            0xb6 => {
+                let value = self.res(6, self.memory.read_byte(self.registers.get_hl()));
+                self.memory.write_byte(value, self.registers.get_hl())
+            }
+
+            0xb7 => {
+                self.registers.a = self.res(6, self.registers.a);
+            }
+            0xb8 => {
+                self.registers.b = self.res(7, self.registers.b);
+            }
+            0xb9 => {
+                self.registers.c = self.res(7, self.registers.c);
+            }
+            0xba => {
+                self.registers.d = self.res(7, self.registers.d);
+            }
+            0xbb => {
+                self.registers.e = self.res(7, self.registers.e);
+            }
+            0xbc => {
+                self.registers.h = self.res(7, self.registers.h);
+            }
+            0xbd => {
+                self.registers.l = self.res(7, self.registers.l);
+            }
+            0xbe => {
+                let value = self.res(7, self.memory.read_byte(self.registers.get_hl()));
+                self.memory.write_byte(value, self.registers.get_hl())
+            }
+            0xbf => {
+                self.registers.a = self.res(7, self.registers.a);
+            }
+
             other => {}
         }
     }
@@ -650,10 +893,10 @@ impl CPU {
         }
     }
 
-    // bit wise operations
+    // bit wise CB operations
 
     fn bit(&mut self, bit: u8, register: u8) {
-        println!("before: {}, after: {}", register, register >> (bit - 1));
+        println!("before: {}, after: {}", register, register >> bit);
         let val = (register >> bit) & 0x01;
         println!("{}", val);
         self.registers.f.zero = val == 1;
@@ -661,6 +904,19 @@ impl CPU {
         self.registers.f.subtract = false;
     }
 
+    fn res(&mut self, bit: u8, register: u8) -> u8 {
+        let mask: u8 = !(0x01 << bit);
+        println!("{mask:b}");
+        register & mask
+    }
+
+    fn set(&mut self, bit: u8, register: u8) -> u8 {
+        let mask: u8 = 0x01 << bit;
+        println!("{mask:b}");
+        register | mask
+    }
+
+    // ALU
     fn add(&mut self, value: u8) {
         // add
         let (new_value, did_overflow) = self.registers.a.overflowing_add(value);
@@ -674,19 +930,14 @@ impl CPU {
 
     fn adc(&mut self, value: u8) {
         // add carry
-        println!(
-            "{value:?}, {a:?}, {carry:?}",
-            a = self.registers.a,
-            carry = self.registers.f.carry as u8
-        );
-        let (new_value, did_overflow) = self.registers.a.overflowing_add(
-            value + (self.registers.f.carry as u8)
-        );
+        let (intermediate, intermediate_overflow) = self.registers.a.overflowing_add(value);
+        let (new_value, did_overflow) = intermediate.overflowing_add(self.registers.f.carry as u8);
         self.registers.f.zero = new_value == 0;
         self.registers.f.subtract = false;
-        self.registers.f.carry = did_overflow;
+        self.registers.f.carry = did_overflow | intermediate_overflow;
 
-        self.registers.f.half_carry = (self.registers.a & 0xf) + (value & 0xf) > 0xf;
+        self.registers.f.half_carry =
+            (self.registers.a & 0xf) + (value & 0xf) + (self.registers.f.carry as u8) > 0xf;
         self.registers.a = new_value;
     }
 
@@ -704,15 +955,15 @@ impl CPU {
 
     fn sbc(&mut self, value: u8) {
         // subtract carry
-        let (new_value, did_overflow) = self.registers.a.overflowing_sub(
-            value - (self.registers.f.carry as u8)
-        );
+        let (intermediate, intermediate_overflow) = self.registers.a.overflowing_sub(value);
+        let (new_value, did_overflow) = intermediate.overflowing_sub(self.registers.f.carry as u8);
         self.registers.f.zero = new_value == 0;
         self.registers.f.subtract = true;
-        self.registers.f.carry = did_overflow;
+        self.registers.f.carry = did_overflow | intermediate_overflow;
 
         // sees if lower nibble is greater, if is, then set half carry to true.
-        self.registers.f.half_carry = self.registers.a & 0xf < value & 0xf;
+        self.registers.f.half_carry =
+            self.registers.a & 0xf < (value & 0xf) + (self.registers.f.carry as u8);
         self.registers.a = new_value;
     }
 
@@ -768,11 +1019,14 @@ impl CPU {
         self.registers.f.half_carry = (value & 0xf) == 0xf;
         new_value
     }
+
+    fn add16(&mut self, value: u16) {}
 }
 
 fn main() {
     env::set_var("RUST_BACKTRACE", "1");
 
+    /* 
     // Read boot-rom file
     let boot = std::fs::read("tetris.gb").unwrap();
 
@@ -784,15 +1038,14 @@ fn main() {
     }
 
     //println!("{:?}", CPU.memory.read_word(CPU.registers.pc));
+    */
 
-    CPU.loope();
-
-    println!("{:?}", CPU.registers)
+    // println!("{:?}", CPU.registers);
 
     //println!("{:?}", CPU.memory.ram)
 
-    /*
     let bytes = std::fs::read("tetris.gb").unwrap();
+    let mut CPU = CPU::new();
 
     let mut title = String::new();
 
@@ -800,6 +1053,17 @@ fn main() {
     for &byte in &bytes[0x0134..0x0143] {
         title.push(byte as char);
     }
+    println!("{}", title);
 
-    println!("{}", title);*/
+    for (position, &byte) in bytes.iter().enumerate() {
+        //println!("{:X?}", byte);
+        CPU.memory.write_byte(byte, (position as u16) + 0x4000);
+    }
+
+    println!("{:b}", CPU.memory.ram[0x41a2]);
+    println!("{:b}", CPU.set(4, CPU.memory.ram[0x41a2]));
+
+    //CPU.loope();
+
+    println!("{}", title);
 }

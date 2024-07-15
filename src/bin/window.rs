@@ -173,8 +173,8 @@ fn toTile(data: &Vec<u8>) -> Vec<[u8; 8]> {
 
     for i in 0..bitarrays.len() {
         if i % 2 == 0 {
-            let left = bitarrays[i];
-            let right = bitarrays[i + 1];
+            let left = bitarrays[i + 1];
+            let right = bitarrays[i];
             let mut array: [u8; 8] = [0; 8];
             //println!("{left:?}, {right:?}");
 
