@@ -1,4 +1,5 @@
 use std::env;
+//use crate::gpu::GPU;
 
 #[derive(Debug)]
 struct Registers {
@@ -12,7 +13,6 @@ struct Registers {
     l: u8,
     pc: u16,
     sp: u16,
-    ime: bool,
 }
 
 impl Registers {
@@ -33,7 +33,6 @@ impl Registers {
             l: 0,
             pc: 0,
             sp: 0,
-            ime: false,
         }
     }
 
@@ -112,6 +111,7 @@ impl std::convert::From<u8> for FlagsRegister {
     }
 }
 struct Memory {
+    //gpu: GPU,
     ram: [u8; 0x10000],
 }
 
@@ -126,6 +126,9 @@ impl Memory {
 
     fn write_byte(&mut self, value: u8, address: u16) {
         self.ram[address as usize] = value;
+        /*match address {
+            0x8000..=0x9fff => {}
+        }*/
     }
 
     fn read_word(&self, address: u16) -> u16 {
@@ -144,6 +147,7 @@ impl Memory {
 struct CPU {
     registers: Registers,
     memory: Memory,
+    ime: bool,
 }
 
 impl CPU {
@@ -151,6 +155,7 @@ impl CPU {
         CPU {
             registers: Registers::new(),
             memory: Memory::new(),
+            ime: false,
         }
     }
 
@@ -229,6 +234,11 @@ impl CPU {
 
             // add 16 bit
 
+            0x09 => self.add16(self.registers.get_bc()),
+            0x19 => self.add16(self.registers.get_de()),
+            0x29 => self.add16(self.registers.get_hl()),
+            0x39 => self.add16(self.registers.sp),
+
             // inc
             0x04 => {
                 self.registers.b = self.inc(self.registers.b);
@@ -285,6 +295,43 @@ impl CPU {
                 self.registers.a = self.dec(self.registers.a);
             }
 
+            // JP
+
+            0x20 => {
+                if !self.registers.f.zero {
+                    self.registers.pc += self.fetch() as u16;
+                } else {
+                    self.registers.pc += 1;
+                }
+            }
+
+            0x30 => {
+                if !self.registers.f.carry {
+                    self.registers.pc += self.fetch() as u16;
+                } else {
+                    self.registers.pc += 1;
+                }
+            }
+
+            0xc3 => {
+                self.registers.pc = self.fetch_word();
+            }
+            0xc2 => {
+                if !self.registers.f.zero {
+                    self.registers.pc = self.fetch_word();
+                } else {
+                    self.registers.pc += 2;
+                }
+            }
+
+            0xd2 => {
+                if !self.registers.f.carry {
+                    self.registers.pc = self.fetch_word();
+                } else {
+                    self.registers.pc += 2;
+                }
+            }
+
             //ld d8
 
             0x06 => {
@@ -312,6 +359,17 @@ impl CPU {
             }
             0x3e => {
                 self.registers.a = self.fetch();
+            }
+
+            // ld a
+            0xfa => {
+                let word = self.fetch_word();
+                self.registers.a = self.memory.read_byte(word);
+            }
+
+            0xea => {
+                let word = self.fetch_word();
+                self.memory.write_byte(self.registers.a, word)
             }
 
             // ld b
@@ -587,7 +645,7 @@ impl CPU {
             0xe2 => { self.memory.write_byte(self.registers.a, 0xff00 + (self.registers.c as u16)) }
 
             0xfb => {
-                self.registers.ime = true;
+                self.ime = true;
             }
 
             other => {
@@ -1020,7 +1078,15 @@ impl CPU {
         new_value
     }
 
-    fn add16(&mut self, value: u16) {}
+    fn add16(&mut self, value: u16) {
+        let word = self.registers.get_hl();
+        let (new_value, did_overflow) = word.overflowing_add(value);
+        self.registers.set_hl(new_value);
+
+        self.registers.f.subtract = false;
+        self.registers.f.carry = did_overflow;
+        self.registers.f.half_carry = (word & 0x07ff) + (value & 0x07ff) > 0x07ff;
+    }
 }
 
 fn main() {
