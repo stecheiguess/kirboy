@@ -32,31 +32,13 @@ impl CPU {
     }
 
     fn execute(&mut self) {
-        println!("PROGRAM COUNTER: {}", self.registers.pc);
+        println!("PROGRAM COUNTER: 0x{:04X}", self.registers.pc);
         let opcode = self.fetch();
         println!("Instruction {:2X}", opcode);
         match opcode {
             0x00 => {}
 
-            /*0x20 => {
-                //println!("{:?}", self.registers);
-                if self.registers.f.zero == false {
-                    //println!("{}", self.fetch())
-                    //self.registers.pc =
-
-                    if self.memory.read_byte(0xff50) == 0 {
-                        println!("BOOT ROM:");
-                        let new = (self.registers.pc + (self.fetch() as u16)) % 255;
-                        self.registers.pc = new;
-                    } else {
-                        println!("{}", self.registers.pc.wrapping_add(self.fetch() as u16));
-                    }
-                    println!("PROGRAM COUNTER: {}", self.registers.pc);
-                }
-            }*/
-
             // ld 16 bit
-
             0x01 => {
                 let word = self.fetch_word();
                 self.registers.set_bc(word)
@@ -76,9 +58,9 @@ impl CPU {
                 self.registers.sp = self.fetch_word();
             }
 
-            0x02 => { self.memory.write_byte(self.registers.a, self.registers.get_bc()) }
+            0x02 => self.memory.write_byte(self.registers.a, self.registers.get_bc()),
 
-            0x12 => { self.memory.write_byte(self.registers.a, self.registers.get_de()) }
+            0x12 => self.memory.write_byte(self.registers.a, self.registers.get_de()),
 
             0x22 => {
                 self.memory.write_byte(self.registers.a, self.registers.get_hl());
@@ -88,16 +70,43 @@ impl CPU {
 
             0x32 => {
                 self.memory.write_byte(self.registers.a, self.registers.get_hl());
-                println!("{hl:?}", hl = self.registers.get_hl());
+                println!("{hl:04X}", hl = self.registers.get_hl());
                 self.registers.set_hl(self.registers.get_hl() - 1)
             }
 
-            // add 16 bit
+            0xf9 => {
+                self.registers.sp = self.registers.get_hl();
+            }
 
+            // add 16 bit
             0x09 => self.add16(self.registers.get_bc()),
             0x19 => self.add16(self.registers.get_de()),
             0x29 => self.add16(self.registers.get_hl()),
             0x39 => self.add16(self.registers.sp),
+
+            0xe8 => {
+                self.registers.sp = self.add16e(self.registers.sp);
+            }
+            0xf8 => {
+                let value = self.add16e(self.registers.sp);
+                self.registers.set_hl(value)
+            }
+
+            // inc 16
+            0x03 => self.registers.set_bc(self.registers.get_bc().wrapping_add(1)),
+            0x13 => self.registers.set_de(self.registers.get_de().wrapping_add(1)),
+            0x23 => self.registers.set_hl(self.registers.get_hl().wrapping_add(1)),
+            0x33 => {
+                self.registers.sp = self.registers.sp.wrapping_add(1);
+            }
+
+            // dec 16
+            0x0b => self.registers.set_bc(self.registers.get_bc().wrapping_sub(1)),
+            0x1b => self.registers.set_de(self.registers.get_de().wrapping_sub(1)),
+            0x2b => self.registers.set_hl(self.registers.get_hl().wrapping_sub(1)),
+            0x3b => {
+                self.registers.sp = self.registers.sp.wrapping_sub(1);
+            }
 
             // inc
             0x04 => {
@@ -155,45 +164,7 @@ impl CPU {
                 self.registers.a = self.dec(self.registers.a);
             }
 
-            // JP
-
-            0x20 => {
-                if !self.registers.f.zero {
-                    self.jump()
-                } else {
-                    self.registers.pc += 1;
-                }
-            }
-
-            0x30 => {
-                if !self.registers.f.carry {
-                    self.jump()
-                } else {
-                    self.registers.pc += 1;
-                }
-            }
-
-            0xc3 => {
-                self.registers.pc = self.fetch_word();
-            }
-            0xc2 => {
-                if !self.registers.f.zero {
-                    self.registers.pc = self.fetch_word();
-                } else {
-                    self.registers.pc += 2;
-                }
-            }
-
-            0xd2 => {
-                if !self.registers.f.carry {
-                    self.registers.pc = self.fetch_word();
-                } else {
-                    self.registers.pc += 2;
-                }
-            }
-
             //ld d8
-
             0x06 => {
                 self.registers.b = self.fetch();
             }
@@ -219,17 +190,6 @@ impl CPU {
             }
             0x3e => {
                 self.registers.a = self.fetch();
-            }
-
-            // ld a
-            0xfa => {
-                let word = self.fetch_word();
-                self.registers.a = self.memory.read_byte(word);
-            }
-
-            0xea => {
-                let word = self.fetch_word();
-                self.memory.write_byte(self.registers.a, word)
             }
 
             // ld b
@@ -384,17 +344,16 @@ impl CPU {
             }
 
             // ld [hl]
-
-            0x70 => { self.memory.write_byte(self.registers.b, self.registers.get_hl()) }
-            0x71 => { self.memory.write_byte(self.registers.c, self.registers.get_hl()) }
-            0x72 => { self.memory.write_byte(self.registers.d, self.registers.get_hl()) }
-            0x73 => { self.memory.write_byte(self.registers.e, self.registers.get_hl()) }
-            0x74 => { self.memory.write_byte(self.registers.h, self.registers.get_hl()) }
-            0x75 => { self.memory.write_byte(self.registers.l, self.registers.get_hl()) }
-            0x77 => { self.memory.write_byte(self.registers.a, self.registers.get_hl()) }
+            0x70 => self.memory.write_byte(self.registers.b, self.registers.get_hl()),
+            0x71 => self.memory.write_byte(self.registers.c, self.registers.get_hl()),
+            0x72 => self.memory.write_byte(self.registers.d, self.registers.get_hl()),
+            0x73 => self.memory.write_byte(self.registers.e, self.registers.get_hl()),
+            0x74 => self.memory.write_byte(self.registers.h, self.registers.get_hl()),
+            0x75 => self.memory.write_byte(self.registers.l, self.registers.get_hl()),
+            0x77 => self.memory.write_byte(self.registers.a, self.registers.get_hl()),
 
             0x76 => {
-                //panic!("END");
+                panic!("END");
             }
 
             // ld a
@@ -423,6 +382,25 @@ impl CPU {
                 self.registers.a = self.registers.a;
             }
 
+            0x0a => {
+                self.registers.a = self.memory.read_byte(self.registers.get_bc());
+            }
+
+            0x1a => {
+                self.registers.a = self.memory.read_byte(self.registers.get_de());
+            }
+
+            0x2a => {
+                self.registers.a = self.memory.read_byte(self.registers.get_hl());
+                self.registers.set_hl(self.registers.get_hl() + 1)
+            }
+
+            0x3a => {
+                self.registers.a = self.memory.read_byte(self.registers.get_hl());
+                self.registers.set_hl(self.registers.get_hl() - 1)
+            }
+
+            // add
             0x80 => self.add(self.registers.b),
             0x81 => self.add(self.registers.c),
             0x82 => self.add(self.registers.d),
@@ -495,14 +473,347 @@ impl CPU {
             0xbe => self.cp(self.memory.read_byte(self.registers.get_hl())),
             0xbf => self.cp(self.registers.a),
 
-            0xcb => { self.execute_cb() }
+            // CB
+            0xcb => self.execute_cb(),
 
-            0xe0 => {
-                let byte = self.fetch() as u16;
-                self.memory.write_byte(self.registers.a, 0xff00 + byte)
+            // a, n8
+            0xc6 => {
+                let byte = self.fetch();
+                self.add(byte)
+            }
+            0xd6 => {
+                let byte = self.fetch();
+                self.sub(byte)
+            }
+            0xe6 => {
+                let byte = self.fetch();
+                self.and(byte)
+            }
+            0xf6 => {
+                let byte = self.fetch();
+                self.or(byte)
+            }
+            0xce => {
+                let byte = self.fetch();
+                self.adc(byte)
+            }
+            0xde => {
+                let byte = self.fetch();
+                self.sbc(byte)
+            }
+            0xee => {
+                let byte = self.fetch();
+                self.xor(byte)
+            }
+            0xfe => {
+                let byte = self.fetch();
+                self.cp(byte)
             }
 
-            0xe2 => { self.memory.write_byte(self.registers.a, 0xff00 + (self.registers.c as u16)) }
+            // random accumulator (a) stuff
+            0x07 => {
+                self.registers.a = self.rlc(self.registers.a);
+                self.registers.f.zero = false;
+            }
+
+            0x17 => {
+                self.registers.a = self.rl(self.registers.a);
+                self.registers.f.zero = false;
+            }
+
+            // really complex daa.
+            0x27 => {
+                if !self.registers.f.subtract {
+                    if self.registers.f.carry || self.registers.a > 0x99 {
+                        self.registers.a = self.registers.a.wrapping_add(0x60);
+                        self.registers.f.carry = true;
+                    }
+                    if self.registers.f.half_carry || self.registers.a & 0x0f > 0x09 {
+                        self.registers.a = self.registers.a.wrapping_add(0x06);
+                    }
+                } else {
+                    if self.registers.f.carry {
+                        self.registers.a = self.registers.a.wrapping_sub(0x60);
+                    }
+                    if self.registers.f.half_carry {
+                        self.registers.a = self.registers.a.wrapping_sub(0x06);
+                    }
+                }
+                self.registers.f.zero = self.registers.a == 0;
+                self.registers.f.half_carry = false;
+            }
+
+            0x0f => {
+                self.registers.a = self.rrc(self.registers.a);
+                self.registers.f.zero = false;
+            }
+            0x1f => {
+                self.registers.a = self.rr(self.registers.a);
+                self.registers.f.zero = false;
+            }
+
+            0x2f => {
+                self.registers.a = !self.registers.a;
+                self.registers.f.subtract = false;
+                self.registers.f.half_carry = false;
+            }
+
+            // register stuff
+            0x37 => {
+                self.registers.f.subtract = false;
+                self.registers.f.half_carry = false;
+                self.registers.f.carry = true;
+            }
+
+            0x3f => {
+                self.registers.f.subtract = false;
+                self.registers.f.half_carry = false;
+                self.registers.f.carry = !self.registers.f.carry;
+            }
+
+            // a, registers. [c]
+            0xe0 => {
+                let byte = self.fetch();
+                self.memory.write_byte(self.registers.a, 0xff00 | (byte as u16))
+            }
+
+            0xf0 => {
+                let byte = self.fetch();
+                let value = self.memory.read_byte(0xff00 | (byte as u16));
+                self.registers.a = value;
+            }
+
+            0xe2 => self.memory.write_byte(self.registers.a, 0xff00 | (self.registers.c as u16)),
+
+            0xf2 => {
+                self.registers.a = self.memory.read_byte(0xff00 | (self.registers.c as u16));
+            }
+
+            0xfa => {
+                let word = self.fetch_word();
+                self.registers.a = self.memory.read_byte(word);
+            }
+
+            0xea => {
+                let word = self.fetch_word();
+                self.memory.write_byte(self.registers.a, word)
+            }
+
+            // push
+            0x08 => {
+                let value = self.fetch_word();
+                self.memory.write_word(value, self.registers.sp)
+            }
+
+            0xc5 => self.push(self.registers.get_bc()),
+            0xd5 => self.push(self.registers.get_de()),
+            0xe5 => self.push(self.registers.get_hl()),
+            0xf5 => self.push(self.registers.get_af()),
+
+            // pop
+            0xc1 => {
+                let value = self.pop();
+                self.registers.set_bc(value)
+            }
+            0xd1 => {
+                let value = self.pop();
+                self.registers.set_de(value)
+            }
+            0xe1 => {
+                let value = self.pop();
+                self.registers.set_hl(value)
+            }
+            0xf1 => {
+                let value = self.pop();
+                self.registers.set_af(value)
+            }
+
+            // rst
+            0xc4 => {
+                if !self.registers.f.zero {
+                    self.push(self.registers.pc + 2);
+                    self.registers.pc = self.fetch_word();
+                } else {
+                    self.registers.pc += 2;
+                }
+            }
+            0xd4 => {
+                if !self.registers.f.carry {
+                    self.push(self.registers.pc + 2);
+                    self.registers.pc = self.fetch_word();
+                } else {
+                    self.registers.pc += 2;
+                }
+            }
+            0xcc => {
+                if self.registers.f.zero {
+                    self.push(self.registers.pc + 2);
+                    self.registers.pc = self.fetch_word();
+                } else {
+                    self.registers.pc += 2;
+                }
+            }
+            0xdc => {
+                if self.registers.f.carry {
+                    self.push(self.registers.pc + 2);
+                    self.registers.pc = self.fetch_word();
+                } else {
+                    self.registers.pc += 2;
+                }
+            }
+
+            0xcd => {
+                self.push(self.registers.pc + 2);
+                self.registers.pc = self.fetch_word();
+            }
+
+            0xc7 => {
+                self.push(self.registers.pc);
+                self.registers.pc = 0x00;
+            }
+
+            0xd7 => {
+                self.push(self.registers.pc);
+                self.registers.pc = 0x10;
+            }
+
+            0xe7 => {
+                self.push(self.registers.pc);
+                self.registers.pc = 0x20;
+            }
+
+            0xf7 => {
+                self.push(self.registers.pc);
+                self.registers.pc = 0x30;
+            }
+
+            0xcf => {
+                self.push(self.registers.pc);
+                self.registers.pc = 0x08;
+            }
+
+            0xdf => {
+                self.push(self.registers.pc);
+                self.registers.pc = 0x18;
+            }
+
+            0xef => {
+                self.push(self.registers.pc);
+                self.registers.pc = 0x28;
+            }
+
+            0xff => {
+                self.push(self.registers.pc);
+                self.registers.pc = 0x38;
+            }
+
+            // return
+            0xc0 => {
+                if !self.registers.f.zero {
+                    self.registers.pc = self.pop();
+                }
+            }
+
+            0xd0 => {
+                if !self.registers.f.carry {
+                    self.registers.pc = self.pop();
+                }
+            }
+
+            0xc8 => {
+                if self.registers.f.zero {
+                    self.registers.pc = self.pop();
+                }
+            }
+
+            0xd8 => {
+                if self.registers.f.carry {
+                    self.registers.pc = self.pop();
+                }
+            }
+
+            0xc9 => {
+                self.registers.pc = self.pop();
+            }
+
+            // jump
+            0x20 => {
+                if !self.registers.f.zero {
+                    self.jump()
+                } else {
+                    self.registers.pc += 1;
+                }
+            }
+
+            0x30 => {
+                if !self.registers.f.carry {
+                    self.jump()
+                } else {
+                    self.registers.pc += 1;
+                }
+            }
+
+            0x18 => self.jump(),
+
+            0x28 => {
+                if self.registers.f.zero {
+                    self.jump()
+                } else {
+                    self.registers.pc += 1;
+                }
+            }
+
+            0x38 => {
+                if self.registers.f.carry {
+                    self.jump()
+                } else {
+                    self.registers.pc += 1;
+                }
+            }
+
+            0xc3 => {
+                self.registers.pc = self.fetch_word();
+            }
+            0xc2 => {
+                if !self.registers.f.zero {
+                    self.registers.pc = self.fetch_word();
+                } else {
+                    self.registers.pc += 2;
+                }
+            }
+
+            0xd2 => {
+                if !self.registers.f.carry {
+                    self.registers.pc = self.fetch_word();
+                } else {
+                    self.registers.pc += 2;
+                }
+            }
+
+            0xca => {
+                if self.registers.f.zero {
+                    self.registers.pc = self.fetch_word();
+                } else {
+                    self.registers.pc += 2;
+                }
+            }
+
+            0xda => {
+                if self.registers.f.carry {
+                    self.registers.pc = self.fetch_word();
+                } else {
+                    self.registers.pc += 2;
+                }
+            }
+
+            0xe9 => {
+                self.registers.pc = self.registers.get_hl();
+            }
+
+            // interrupts
+            0xf3 => {
+                self.ime = false;
+            }
 
             0xfb => {
                 self.ime = true;
@@ -519,6 +830,230 @@ impl CPU {
         println!("CB Opcode is: {:2X}", opcode);
 
         match opcode {
+            // rlc
+            0x00 => {
+                self.registers.b = self.rlc(self.registers.b);
+            }
+            0x01 => {
+                self.registers.c = self.rlc(self.registers.c);
+            }
+            0x02 => {
+                self.registers.d = self.rlc(self.registers.d);
+            }
+            0x03 => {
+                self.registers.e = self.rlc(self.registers.e);
+            }
+            0x04 => {
+                self.registers.h = self.rlc(self.registers.h);
+            }
+            0x05 => {
+                self.registers.l = self.rlc(self.registers.l);
+            }
+            0x06 => {
+                let value = self.rlc(self.memory.read_byte(self.registers.get_hl()));
+                self.memory.write_byte(value, self.registers.get_hl())
+            }
+
+            0x07 => {
+                self.registers.a = self.rlc(self.registers.a);
+            }
+
+            // rrc
+            0x08 => {
+                self.registers.b = self.rrc(self.registers.b);
+            }
+            0x09 => {
+                self.registers.c = self.rrc(self.registers.c);
+            }
+            0x0a => {
+                self.registers.d = self.rrc(self.registers.d);
+            }
+            0x0b => {
+                self.registers.e = self.rrc(self.registers.e);
+            }
+            0x0c => {
+                self.registers.h = self.rrc(self.registers.h);
+            }
+            0x0d => {
+                self.registers.l = self.rrc(self.registers.l);
+            }
+            0x0e => {
+                let value = self.rrc(self.memory.read_byte(self.registers.get_hl()));
+                self.memory.write_byte(value, self.registers.get_hl())
+            }
+
+            0x0f => {
+                self.registers.a = self.rrc(self.registers.a);
+            }
+
+            // rl
+            0x10 => {
+                self.registers.b = self.rl(self.registers.b);
+            }
+            0x11 => {
+                self.registers.c = self.rl(self.registers.c);
+            }
+            0x12 => {
+                self.registers.d = self.rl(self.registers.d);
+            }
+            0x13 => {
+                self.registers.e = self.rl(self.registers.e);
+            }
+            0x14 => {
+                self.registers.h = self.rl(self.registers.h);
+            }
+            0x15 => {
+                self.registers.l = self.rl(self.registers.l);
+            }
+            0x16 => {
+                let value = self.rl(self.memory.read_byte(self.registers.get_hl()));
+                self.memory.write_byte(value, self.registers.get_hl())
+            }
+
+            0x17 => {
+                self.registers.a = self.rl(self.registers.a);
+            }
+
+            // rr
+            0x18 => {
+                self.registers.b = self.rr(self.registers.b);
+            }
+            0x19 => {
+                self.registers.c = self.rr(self.registers.c);
+            }
+            0x1a => {
+                self.registers.d = self.rr(self.registers.d);
+            }
+            0x1b => {
+                self.registers.e = self.rr(self.registers.e);
+            }
+            0x1c => {
+                self.registers.h = self.rr(self.registers.h);
+            }
+            0x1d => {
+                self.registers.l = self.rr(self.registers.l);
+            }
+            0x1e => {
+                let value = self.rr(self.memory.read_byte(self.registers.get_hl()));
+                self.memory.write_byte(value, self.registers.get_hl())
+            }
+
+            0x1f => {
+                self.registers.a = self.rr(self.registers.a);
+            }
+
+            // sla
+            0x20 => {
+                self.registers.b = self.sla(self.registers.b);
+            }
+            0x21 => {
+                self.registers.c = self.sla(self.registers.c);
+            }
+            0x22 => {
+                self.registers.d = self.sla(self.registers.d);
+            }
+            0x23 => {
+                self.registers.e = self.sla(self.registers.e);
+            }
+            0x24 => {
+                self.registers.h = self.sla(self.registers.h);
+            }
+            0x25 => {
+                self.registers.l = self.sla(self.registers.l);
+            }
+            0x26 => {
+                let value = self.sla(self.memory.read_byte(self.registers.get_hl()));
+                self.memory.write_byte(value, self.registers.get_hl())
+            }
+
+            0x27 => {
+                self.registers.a = self.sla(self.registers.a);
+            }
+
+            // sra
+            0x28 => {
+                self.registers.b = self.sra(self.registers.b);
+            }
+            0x29 => {
+                self.registers.c = self.sra(self.registers.c);
+            }
+            0x2a => {
+                self.registers.d = self.sra(self.registers.d);
+            }
+            0x2b => {
+                self.registers.e = self.sra(self.registers.e);
+            }
+            0x2c => {
+                self.registers.h = self.sra(self.registers.h);
+            }
+            0x2d => {
+                self.registers.l = self.sra(self.registers.l);
+            }
+            0x2e => {
+                let value = self.sra(self.memory.read_byte(self.registers.get_hl()));
+                self.memory.write_byte(value, self.registers.get_hl())
+            }
+
+            0x2f => {
+                self.registers.a = self.sra(self.registers.a);
+            }
+
+            // swap
+            0x30 => {
+                self.registers.b = self.swap(self.registers.b);
+            }
+            0x31 => {
+                self.registers.c = self.swap(self.registers.c);
+            }
+            0x32 => {
+                self.registers.d = self.swap(self.registers.d);
+            }
+            0x33 => {
+                self.registers.e = self.swap(self.registers.e);
+            }
+            0x34 => {
+                self.registers.h = self.swap(self.registers.h);
+            }
+            0x35 => {
+                self.registers.l = self.swap(self.registers.l);
+            }
+            0x36 => {
+                let value = self.swap(self.memory.read_byte(self.registers.get_hl()));
+                self.memory.write_byte(value, self.registers.get_hl())
+            }
+
+            0x37 => {
+                self.registers.a = self.swap(self.registers.a);
+            }
+
+            // srl
+            0x38 => {
+                self.registers.b = self.srl(self.registers.b);
+            }
+            0x39 => {
+                self.registers.c = self.srl(self.registers.c);
+            }
+            0x3a => {
+                self.registers.d = self.srl(self.registers.d);
+            }
+            0x3b => {
+                self.registers.e = self.srl(self.registers.e);
+            }
+            0x3c => {
+                self.registers.h = self.srl(self.registers.h);
+            }
+            0x3d => {
+                self.registers.l = self.srl(self.registers.l);
+            }
+            0x3e => {
+                let value = self.srl(self.memory.read_byte(self.registers.get_hl()));
+                self.memory.write_byte(value, self.registers.get_hl())
+            }
+
+            0x3f => {
+                self.registers.a = self.srl(self.registers.a);
+            }
+
             // bit 0
             0x40 => self.bit(0, self.registers.b),
             0x41 => self.bit(0, self.registers.c),
@@ -593,7 +1128,6 @@ impl CPU {
             0x7f => self.bit(7, self.registers.a),
 
             // reset to 0
-
             0x80 => {
                 self.registers.b = self.res(0, self.registers.b);
             }
@@ -801,6 +1335,214 @@ impl CPU {
                 self.registers.a = self.res(7, self.registers.a);
             }
 
+            // set to 1
+            0xc0 => {
+                self.registers.b = self.set(0, self.registers.b);
+            }
+            0xc1 => {
+                self.registers.c = self.set(0, self.registers.c);
+            }
+            0xc2 => {
+                self.registers.d = self.set(0, self.registers.d);
+            }
+            0xc3 => {
+                self.registers.e = self.set(0, self.registers.e);
+            }
+            0xc4 => {
+                self.registers.h = self.set(0, self.registers.h);
+            }
+            0xc5 => {
+                self.registers.l = self.set(0, self.registers.l);
+            }
+            0xc6 => {
+                let value = self.set(0, self.memory.read_byte(self.registers.get_hl()));
+                self.memory.write_byte(value, self.registers.get_hl())
+            }
+
+            0xc7 => {
+                self.registers.a = self.set(0, self.registers.a);
+            }
+            0xc8 => {
+                self.registers.b = self.set(1, self.registers.b);
+            }
+            0xc9 => {
+                self.registers.c = self.set(1, self.registers.c);
+            }
+            0xca => {
+                self.registers.d = self.set(1, self.registers.d);
+            }
+            0xcb => {
+                self.registers.e = self.set(1, self.registers.e);
+            }
+            0xcc => {
+                self.registers.h = self.set(1, self.registers.h);
+            }
+            0xcd => {
+                self.registers.l = self.set(1, self.registers.l);
+            }
+            0xce => {
+                let value = self.set(1, self.memory.read_byte(self.registers.get_hl()));
+                self.memory.write_byte(value, self.registers.get_hl())
+            }
+            0xcf => {
+                self.registers.a = self.set(1, self.registers.a);
+            }
+
+            0xd0 => {
+                self.registers.b = self.set(2, self.registers.b);
+            }
+            0xd1 => {
+                self.registers.c = self.set(2, self.registers.c);
+            }
+            0xd2 => {
+                self.registers.d = self.set(2, self.registers.d);
+            }
+            0xd3 => {
+                self.registers.e = self.set(2, self.registers.e);
+            }
+            0xd4 => {
+                self.registers.h = self.set(2, self.registers.h);
+            }
+            0xd5 => {
+                self.registers.l = self.set(2, self.registers.l);
+            }
+            0xd6 => {
+                let value = self.set(2, self.memory.read_byte(self.registers.get_hl()));
+                self.memory.write_byte(value, self.registers.get_hl())
+            }
+
+            0xd7 => {
+                self.registers.a = self.set(2, self.registers.a);
+            }
+            0xd8 => {
+                self.registers.b = self.set(3, self.registers.b);
+            }
+            0xd9 => {
+                self.registers.c = self.set(3, self.registers.c);
+            }
+            0xda => {
+                self.registers.d = self.set(3, self.registers.d);
+            }
+            0xdb => {
+                self.registers.e = self.set(3, self.registers.e);
+            }
+            0xdc => {
+                self.registers.h = self.set(3, self.registers.h);
+            }
+            0xdd => {
+                self.registers.l = self.set(3, self.registers.l);
+            }
+            0xde => {
+                let value = self.set(3, self.memory.read_byte(self.registers.get_hl()));
+                self.memory.write_byte(value, self.registers.get_hl())
+            }
+            0xdf => {
+                self.registers.a = self.set(3, self.registers.a);
+            }
+            0xe0 => {
+                self.registers.b = self.set(4, self.registers.b);
+            }
+            0xe1 => {
+                self.registers.c = self.set(4, self.registers.c);
+            }
+            0xe2 => {
+                self.registers.d = self.set(4, self.registers.d);
+            }
+            0xe3 => {
+                self.registers.e = self.set(4, self.registers.e);
+            }
+            0xe4 => {
+                self.registers.h = self.set(4, self.registers.h);
+            }
+            0xe5 => {
+                self.registers.l = self.set(4, self.registers.l);
+            }
+            0xe6 => {
+                let value = self.set(4, self.memory.read_byte(self.registers.get_hl()));
+                self.memory.write_byte(value, self.registers.get_hl())
+            }
+
+            0xe7 => {
+                self.registers.a = self.set(4, self.registers.a);
+            }
+            0xe8 => {
+                self.registers.b = self.set(5, self.registers.b);
+            }
+            0xe9 => {
+                self.registers.c = self.set(5, self.registers.c);
+            }
+            0xea => {
+                self.registers.d = self.set(5, self.registers.d);
+            }
+            0xeb => {
+                self.registers.e = self.set(5, self.registers.e);
+            }
+            0xec => {
+                self.registers.h = self.set(5, self.registers.h);
+            }
+            0xed => {
+                self.registers.l = self.set(5, self.registers.l);
+            }
+            0xee => {
+                let value = self.set(5, self.memory.read_byte(self.registers.get_hl()));
+                self.memory.write_byte(value, self.registers.get_hl())
+            }
+            0xef => {
+                self.registers.a = self.set(5, self.registers.a);
+            }
+
+            0xf0 => {
+                self.registers.b = self.set(6, self.registers.b);
+            }
+            0xf1 => {
+                self.registers.c = self.set(6, self.registers.c);
+            }
+            0xf2 => {
+                self.registers.d = self.set(6, self.registers.d);
+            }
+            0xf3 => {
+                self.registers.e = self.set(6, self.registers.e);
+            }
+            0xf4 => {
+                self.registers.h = self.set(6, self.registers.h);
+            }
+            0xf5 => {
+                self.registers.l = self.set(6, self.registers.l);
+            }
+            0xf6 => {
+                let value = self.set(6, self.memory.read_byte(self.registers.get_hl()));
+                self.memory.write_byte(value, self.registers.get_hl())
+            }
+
+            0xf7 => {
+                self.registers.a = self.set(6, self.registers.a);
+            }
+            0xf8 => {
+                self.registers.b = self.set(7, self.registers.b);
+            }
+            0xf9 => {
+                self.registers.c = self.set(7, self.registers.c);
+            }
+            0xfa => {
+                self.registers.d = self.set(7, self.registers.d);
+            }
+            0xfb => {
+                self.registers.e = self.set(7, self.registers.e);
+            }
+            0xfc => {
+                self.registers.h = self.set(7, self.registers.h);
+            }
+            0xfd => {
+                self.registers.l = self.set(7, self.registers.l);
+            }
+            0xfe => {
+                let value = self.set(7, self.memory.read_byte(self.registers.get_hl()));
+                self.memory.write_byte(value, self.registers.get_hl())
+            }
+            0xff => {
+                self.registers.a = self.set(7, self.registers.a);
+            }
+
             other => {}
         }
     }
@@ -808,7 +1550,12 @@ impl CPU {
     fn loope(&mut self) {
         while self.registers.pc != 0xffff {
             self.execute();
+            println!("{:?}", self.registers);
         }
+        /*for n in 1..100 {
+            self.execute();
+            println!("{:?}", self.registers);
+        }*/
     }
 
     // bit wise CB operations
@@ -817,7 +1564,7 @@ impl CPU {
         println!("before: {}, after: {}", register, register >> bit);
         let val = (register >> bit) & 0x01;
         println!("{}", val);
-        self.registers.f.zero = val == 1;
+        self.registers.f.zero = val == 0;
         self.registers.f.half_carry = true;
         self.registers.f.subtract = false;
     }
@@ -948,6 +1695,16 @@ impl CPU {
         self.registers.f.half_carry = (word & 0x07ff) + (value & 0x07ff) > 0x07ff;
     }
 
+    fn add16e(&mut self, register: u16) -> u16 {
+        let byte = self.fetch() as i8 as i16 as u16;
+
+        self.registers.f.zero = false;
+        self.registers.f.subtract = false;
+        self.registers.f.half_carry = (register & 0x000f) + (byte & 0x000f) > 0x000f;
+        self.registers.f.carry = (register & 0x00ff) + (byte & 0x00ff) > 0x00ff;
+        register.wrapping_add(byte)
+    }
+
     fn jump(&mut self) {
         let address = self.fetch() as i8;
         self.registers.pc = ((self.registers.pc as u32 as i32) + (address as i32)) as u16;
@@ -1001,14 +1758,56 @@ impl CPU {
         self.registers.f.half_carry = false;
         new_value
     }
+
+    // rotate left carry
+    fn rlc(&mut self, value: u8) -> u8 {
+        let new_value = (value << 1) | (value >> 7);
+        self.registers.f.carry = (value >> 7) == 1;
+        self.registers.f.zero = new_value == 0;
+        self.registers.f.subtract = false;
+        self.registers.f.half_carry = false;
+        new_value
+    }
+
+    // rotate left
+
+    fn rl(&mut self, value: u8) -> u8 {
+        let new_value = (value << 1) | (self.registers.f.carry as u8);
+        self.registers.f.carry = (value >> 7) == 1;
+        self.registers.f.zero = new_value == 0;
+        self.registers.f.subtract = false;
+        self.registers.f.half_carry = false;
+        new_value
+    }
+
+    // rotate right carry
+
+    fn rrc(&mut self, value: u8) -> u8 {
+        let new_value = (value >> 1) | (value << 7);
+        self.registers.f.carry = (value & 0x01) == 1;
+        self.registers.f.zero = new_value == 0;
+        self.registers.f.subtract = false;
+        self.registers.f.half_carry = false;
+        new_value
+    }
+
+    // rotate right
+
+    fn rr(&mut self, value: u8) -> u8 {
+        let new_value = (value >> 1) | ((self.registers.f.carry as u8) << 7);
+        self.registers.f.carry = (value & 0x01) == 1;
+        self.registers.f.zero = new_value == 0;
+        self.registers.f.subtract = false;
+        self.registers.f.half_carry = false;
+        new_value
+    }
 }
 
 fn main() {
     env::set_var("RUST_BACKTRACE", "1");
 
-    /* 
     // Read boot-rom file
-    let boot = std::fs::read("tetris.gb").unwrap();
+    let boot = std::fs::read("boot.bin").unwrap();
 
     let mut CPU = CPU::new();
 
@@ -1017,14 +1816,13 @@ fn main() {
         CPU.memory.write_byte(byte, position as u16);
     }
 
-    //println!("{:?}", CPU.memory.read_word(CPU.registers.pc));
-    */
+    CPU.loope();
 
-    // println!("{:?}", CPU.registers);
+    println!("{:?}", CPU.memory.read_word(CPU.registers.pc));
 
     //println!("{:?}", CPU.memory.ram)
 
-    let bytes = std::fs::read("tetris.gb").unwrap();
+    /*let bytes = std::fs::read("tetris.gb").unwrap();
     let mut CPU = CPU::new();
 
     let mut title = String::new();
@@ -1045,39 +1843,39 @@ fn main() {
 
     //CPU.loope();
 
-    println!("{}", title);
+    println!("{}", title);*/
 }
 
 /*    fn swap(&mut self, register: &mut u8) {
-        *register = (*register >> 4) | (*register << 4);
-        self.registers.f.zero = *register == 0;
-        self.registers.f.subtract = false;
-        self.registers.f.half_carry = false;
-        self.registers.f.carry = false;
-    }
+    *register = (*register >> 4) | (*register << 4);
+    self.registers.f.zero = *register == 0;
+    self.registers.f.subtract = false;
+    self.registers.f.half_carry = false;
+    self.registers.f.carry = false;
+}
 
-    // arithmetic/logical left shift.
-    fn sla(&mut self, register: &mut u8) {
-        self.registers.f.carry = (*register >> 7) == 1;
-        *register <<= 1;
-        self.registers.f.zero = *register == 0;
-        self.registers.f.subtract = false;
-        self.registers.f.half_carry = false;
-    }
+// arithmetic/logical left shift.
+fn sla(&mut self, register: &mut u8) {
+    self.registers.f.carry = (*register >> 7) == 1;
+    *register <<= 1;
+    self.registers.f.zero = *register == 0;
+    self.registers.f.subtract = false;
+    self.registers.f.half_carry = false;
+}
 
-    //arithmetic right shift.
-    fn sra(&mut self, register: &mut u8) {
-        self.registers.f.carry = (*register & 0x1) == 0x1;
-        *register = (*register & 0x80) | (*register >> 1);
-        self.registers.f.zero = *register == 0;
-        self.registers.f.subtract = false;
-        self.registers.f.half_carry = false;
-    }
-    //logical right shift.
-    fn srl(&mut self, register: &mut u8) {
-        self.registers.f.carry = (*register & 0x1) == 0x1;
-        *register = *register >> 1;
-        self.registers.f.zero = *register == 0;
-        self.registers.f.subtract = false;
-        self.registers.f.half_carry = false;
-    } */
+//arithmetic right shift.
+fn sra(&mut self, register: &mut u8) {
+    self.registers.f.carry = (*register & 0x1) == 0x1;
+    *register = (*register & 0x80) | (*register >> 1);
+    self.registers.f.zero = *register == 0;
+    self.registers.f.subtract = false;
+    self.registers.f.half_carry = false;
+}
+//logical right shift.
+fn srl(&mut self, register: &mut u8) {
+    self.registers.f.carry = (*register & 0x1) == 0x1;
+    *register = *register >> 1;
+    self.registers.f.zero = *register == 0;
+    self.registers.f.subtract = false;
+    self.registers.f.half_carry = false;
+} */

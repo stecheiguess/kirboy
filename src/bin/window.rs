@@ -5,10 +5,10 @@ use std::convert;
 
 use error_iter::ErrorIter as _;
 use log::error;
-use pixels::{ Error, Pixels, SurfaceTexture };
-use winit::dpi::{ LogicalSize };
-use winit::event::{ Event, VirtualKeyCode };
-use winit::event_loop::{ ControlFlow, EventLoop };
+use pixels::{Error, Pixels, SurfaceTexture};
+use winit::dpi::LogicalSize;
+use winit::event::{Event, VirtualKeyCode};
+use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
 
@@ -146,12 +146,12 @@ impl World {
 
             let rgba = if inside_range {
                 match tile[y as usize][x as usize] {
-                    0 => { [0x0f, 0x38, 0x0f, 0xff] }
-                    1 => { [0x30, 0x62, 0x30, 0xff] }
-                    2 => { [0x8b, 0xac, 0x0f, 0xff] }
-                    3 => { [0x9b, 0xbc, 0x0f, 0xff] }
+                    0 => [0x0f, 0x38, 0x0f, 0xff],
+                    1 => [0x30, 0x62, 0x30, 0xff],
+                    2 => [0x8b, 0xac, 0x0f, 0xff],
+                    3 => [0x9b, 0xbc, 0x0f, 0xff],
 
-                    _ => { [0x0f, 0x38, 0x0f, 0xff] }
+                    _ => [0x0f, 0x38, 0x0f, 0xff],
                 }
             } else {
                 [0x48, 0xb2, 0xe8, 0xff]

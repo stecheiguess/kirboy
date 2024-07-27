@@ -11,6 +11,9 @@ pub struct GPU {
     vram2: [u8; 0x800],
     tile_maps: [u8; 0x400],
     oam: [u8; 0xa0],
+    bgp: u8,
+    obp0: u8,
+    obp1: u8,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -64,6 +67,36 @@ impl std::convert::From<u8> for ControlRegister {
 }
 
 impl GPU {
+    pub fn new() -> GPU {
+        GPU {
+            control: ControlRegister {
+                lcd_enable: false,
+                window_tile_map: false,
+                window_enable: false,
+                tile_data: false,
+                bg_tile_map: false,
+                obj_size: false,
+                obj_enable: false,
+                // for DMG, bg and window display, for CGB, master priority
+                bg_window_enable: false,
+            },
+            ly: 0,
+            lyc: 0,
+            scy: 0,
+            scx: 0,
+            winy: 0,
+            winx: 0,
+            vram0: [0; 0x800],
+            vram1: [0; 0x800],
+            vram2: [0; 0x800],
+            tile_maps: [0; 0x400],
+            oam: [0; 0xa0],
+            bgp: 0,
+            obp0: 0,
+            obp1: 0,
+        }
+    }
+
     pub fn read(&mut self, address: u16) -> u8 {
         match address {
             0xff40 => u8::from(self.control),
@@ -71,6 +104,9 @@ impl GPU {
             0xff43 => self.scx,
             0xff44 => self.ly,
             0xff45 => self.lyc,
+            0xff47 => self.bgp,
+            0xff48 => self.obp0,
+            0xff49 => self.obp1,
             0xff4a => self.winy,
             0xff4b => self.winx,
 
@@ -80,7 +116,7 @@ impl GPU {
             0x9800..=0x9bff => self.tile_maps[(address - 0x9800) as usize],
 
             0xfe00..=0xfe9f => self.oam[(address - 0xfe00) as usize],
-            _ => { 0x0 }
+            _ => 0x0,
         }
     }
 
@@ -97,9 +133,22 @@ impl GPU {
             }
             //read only
             0xff44 => {}
+
             0xff45 => {
                 self.lyc = value;
             }
+
+            0xff47 => {
+                self.bgp = value;
+            }
+            0xff48 => {
+                self.obp0 = value;
+            }
+
+            0xff49 => {
+                self.obp1 = value;
+            }
+
             0xff4a => {
                 self.winy = value;
             }
@@ -127,5 +176,3 @@ impl GPU {
         }
     }
 }
-
-fn main() {}
