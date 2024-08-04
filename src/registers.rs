@@ -13,8 +13,8 @@ pub struct Registers {
 }
 
 impl Registers {
-    pub fn new() -> Registers {
-        Registers {
+    pub fn new() -> Self {
+        Self {
             a: 0,
             f: FlagsRegister {
                 zero: false,
@@ -30,6 +30,26 @@ impl Registers {
             l: 0,
             pc: 0,
             sp: 0,
+        }
+    }
+
+    pub fn init() -> Self {
+        Self {
+            a: 1,
+            f: FlagsRegister {
+                zero: true,
+                subtract: false,
+                half_carry: false,
+                carry: false,
+            },
+            b: 0x00,
+            c: 0x13,
+            d: 0,
+            e: 0xd8,
+            h: 0x01,
+            l: 0x4d,
+            pc: 0x0100,
+            sp: 0xfffe,
         }
     }
 
@@ -85,10 +105,10 @@ const CARRY_FLAG_BYTE_POSITION: u8 = 4;
 
 impl std::convert::From<FlagsRegister> for u8 {
     fn from(flag: FlagsRegister) -> u8 {
-        ((if flag.zero { 1 } else { 0 }) << ZERO_FLAG_BYTE_POSITION)
-            | ((if flag.subtract { 1 } else { 0 }) << SUBTRACT_FLAG_BYTE_POSITION)
-            | ((if flag.half_carry { 1 } else { 0 }) << HALF_CARRY_FLAG_BYTE_POSITION)
-            | ((if flag.carry { 1 } else { 0 }) << CARRY_FLAG_BYTE_POSITION)
+        ((if flag.zero { 1 } else { 0 }) << ZERO_FLAG_BYTE_POSITION) |
+            ((if flag.subtract { 1 } else { 0 }) << SUBTRACT_FLAG_BYTE_POSITION) |
+            ((if flag.half_carry { 1 } else { 0 }) << HALF_CARRY_FLAG_BYTE_POSITION) |
+            ((if flag.carry { 1 } else { 0 }) << CARRY_FLAG_BYTE_POSITION)
     }
 }
 
