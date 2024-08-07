@@ -21,6 +21,9 @@ const WIDTH: u32 = 160;
 const HEIGHT: u32 = 144;
 const BOX_SIZE: i16 = 64;
 
+const AFTER_BOOT: bool = true;
+const ROM: &str = "08-misc instrs.gb";
+
 /// Representation of the application state. In this example, a box will bounce around the screen.
 struct Screen {
     /*box_x: i16,
@@ -109,6 +112,15 @@ fn main() -> Result<(), Error> {
                 return;
             }
 
+            if input.key_pressed(VirtualKeyCode::A) {
+                screen.cpu.mmu.joypad.key_down(emulator::joypad::Input::Right);
+                return;
+            }
+            if input.key_released(VirtualKeyCode::A) {
+                screen.cpu.mmu.joypad.key_up(emulator::joypad::Input::Right);
+                return;
+            }
+
             // Resize the window
             if let Some(size) = input.window_resized() {
                 if let Err(err) = pixels.resize_surface(size.width, size.height) {
@@ -133,14 +145,21 @@ fn log_error<E: std::error::Error + 'static>(method_name: &str, err: E) {
 impl Screen {
     /// Create a new `World` instance that can draw a moving box.
     fn new() -> Self {
-        let boot = std::fs::read("drmario.gb").unwrap();
+        let rom = std::fs::read(ROM).unwrap();
 
-        let mut CPU = CPU::new_wb();
+        let mut CPU = if AFTER_BOOT { CPU::new_wb() } else { CPU::new() };
+
+        for (position, &byte) in rom.iter().enumerate() {
+            //println!("{:X?}", byte);
+            CPU.mmu.write_byte(byte, position as u16);
+        }
+
+        /*let boot = std::fs::read("boot.bin").unwrap();
 
         for (position, &byte) in boot.iter().enumerate() {
             //println!("{:X?}", byte);
             CPU.mmu.write_byte(byte, position as u16);
-        }
+        }*/
 
         Self {
             //box_x: 24,
@@ -153,8 +172,14 @@ impl Screen {
 
     /// Update the `World` internal state; bounce the box around the screen.
     fn update(&mut self) {
-        for x in 0..100 {
+        for x in 0..1000 {
             self.cpu.cycle();
+            /*if x % 2 == 0 {
+                self.cpu.mmu.joypad.key_down(emulator::joypad::Input::Right);
+            } else {
+                self.cpu.mmu.joypad.key_up(emulator::joypad::Input::Right);
+            }*/
+            //println!("{}", self.cpu.mmu.joypad.interrupt);
         }
     }
 
@@ -162,7 +187,7 @@ impl Screen {
     ///
     /// Assumes the default texture format: `wgpu::TextureFormat::Rgba8UnormSrgb`
     fn draw(&self, frame: &mut [u8]) {
-        let screen = self.cpu.mmu.gpu.bg_buffer;
+        let screen = self.cpu.mmu.gpu.buffer;
         for (i, pixel) in frame.chunks_exact_mut(4).enumerate() {
             /*
             let inside_the_box =

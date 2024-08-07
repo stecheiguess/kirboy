@@ -91,7 +91,7 @@ pub struct GPU {
     clock: u16,
 
     oam_buffer: [[u8; 4]; 10],
-    pub bg_buffer: [u8; SCREEN_HEIGHT * SCREEN_WIDTH],
+    pub buffer: [u8; SCREEN_HEIGHT * SCREEN_WIDTH],
 
     pub interrupt_stat: bool,
     pub interrupt_vblank: bool,
@@ -134,7 +134,7 @@ impl GPU {
             int_2: false,
 
             oam_buffer: [[0; 4]; 10],
-            bg_buffer: [1; SCREEN_HEIGHT * SCREEN_WIDTH],
+            buffer: [1; SCREEN_HEIGHT * SCREEN_WIDTH],
 
             interrupt_stat: false,
             interrupt_vblank: false,
@@ -150,7 +150,6 @@ impl GPU {
                     ((self.int_2 as u8) << 5) |
                     ((self.int_1 as u8) << 4) |
                     ((self.int_0 as u8) << 3) |
-                    (((self.lyc == self.ly) as u8) << 2) |
                     (self.mode as u8)
             }
             0xff42 => self.scy,
@@ -181,6 +180,14 @@ impl GPU {
             0xff40 => {
                 self.control = ControlRegister::from(value);
             }
+
+            0xff41 => {
+                self.int_lyc = ((value >> 6) & 0b1) != 0;
+                self.int_2 = ((value >> 5) & 0b1) != 0;
+                self.int_1 = ((value >> 4) & 0b1) != 0;
+                self.int_0 = ((value >> 3) & 0b1) != 0;
+            }
+
             0xff42 => {
                 self.scy = value;
             }
@@ -276,14 +283,57 @@ impl GPU {
             // panic!("DF");
             //}
 
-            self.bg_buffer[(self.ly as usize) * SCREEN_WIDTH + pixel_index] = pixel_id;
+            self.buffer[(self.ly as usize) * SCREEN_WIDTH + pixel_index] = pixel_id;
         }
     }
 
-    fn oam_scan(&mut self) {
-        /*if !self.control.obj_enable {
+    fn draw_window_line(&mut self) {
+        if !self.control.window_enable {
             return;
-        }*/
+        }
+
+        if self.winy <= self.ly {
+            let y = self.ly - self.winy;
+            let tile_map_row = y / 8;
+            let y_in_tile = y % 8;
+            let win_addr = if self.control.window_tile_map { 0x9c00 } else { 0x9800 };
+
+            for pixel_index in (self.winx as usize) + 7..SCREEN_WIDTH {
+                let x = pixel_index as u8;
+                let tile_map_col = x / 8;
+                let x_in_tile = x % 8;
+
+                let tile_index = self.read(
+                    win_addr + ((tile_map_row as u16) << 5) + (tile_map_col as u16)
+                );
+                let tile_addr = if self.control.tile_data {
+                    0x8000 + (tile_index as u16) * 16
+                } else {
+                    0x8800 + (((tile_index as i8 as i16) + 128) as u16) * 16
+                };
+
+                let low =
+                    (self.read(tile_addr + ((y_in_tile * 2) as u16)) >> (7 - x_in_tile)) & 0x1;
+                let high =
+                    (self.read(tile_addr + ((y_in_tile * 2 + 1) as u16)) >> (7 - x_in_tile)) & 0x1;
+
+                let pixel_color = (high << 1) | low;
+
+                let pixel_id = (self.bgp >> (pixel_color * 2)) & 0x03;
+
+                //if pixel_id > 0 {
+                // panic!("DF");
+                //}
+
+                self.buffer[(self.ly as usize) * SCREEN_WIDTH + pixel_index] = pixel_id;
+            }
+        }
+    }
+
+    /* fn oam_scan(&mut self) {
+        if !self.control.obj_enable {
+            return;
+        }
         //let mut buffer = [(0, 0, 0); 10];
         let sprite_size = if self.control.obj_size { 16 } else { 8 };
 
@@ -298,76 +348,82 @@ impl GPU {
 
             let y = self.oam[sprite_index][0];
             let x = self.oam[sprite_index][1];
-            println!("{:?}", self.oam[sprite_index]);
-            if y + sprite_size > line && line >= y && x > 0 {
+            //println!("{:?}", self.oam[sprite_index]);
+            println!("y: {}, sprite_size: {}, line: {}", y, sprite_size, line);
+            if y + sprite_size > line && line >= y {
                 self.oam_buffer[buffer_index] = self.oam[sprite_index];
                 buffer_index += 1;
             }
         }
-    }
+    } */
 
     fn draw_sprite_line(&mut self) {
         if !self.control.obj_enable {
             return;
         }
 
-        let sprite_size = if self.control.obj_size { 16 } else { 8 };
+        for sprite_index in 0..40 {
+            let y = (self.oam[sprite_index][0] as i32) - 16;
+            let x = (self.oam[sprite_index][1] as i32) - 8;
+            let sprite_attr = self.oam[sprite_index][3];
+            let sprite_size = if self.control.obj_size { 16 } else { 8 };
 
-        let line = self.ly + 16;
+            let x_flip = ((sprite_attr >> 5) & 0x1) == 1;
+            let y_flip = ((sprite_attr >> 6) & 0x1) == 1;
 
-        for sprite_index in 0..10 {
-            let y = self.oam_buffer[sprite_index][0];
-            let x = self.oam_buffer[sprite_index][1];
-
-            let palette = (self.oam_buffer[sprite_index][3] >> 4) & 0x1;
-
-            let y_in_sprite = line - y;
-
-            let tile_index = if sprite_size == 16 {
-                if y_in_sprite < 8 {
-                    self.oam_buffer[sprite_index][2] & 0xfe
+            if self.ly >= (y as u8) && (self.ly as i32) < y + sprite_size {
+                let y_in_sprite = if y_flip {
+                    (sprite_size as u8) - (self.ly - (y as u8)) - 1
                 } else {
-                    self.oam_buffer[sprite_index][2] | 0x01
-                }
-            } else {
-                self.oam_buffer[sprite_index][2]
-            };
+                    self.ly - (y as u8)
+                };
 
-            let tile_addr = if self.control.tile_data {
-                0x8000 + (tile_index as u16) * 16
-            } else {
-                0x8800 + (((tile_index as i8 as i16) + 128) as u16) * 16
-            };
+                let tile_index = if sprite_size == 16 {
+                    if y_in_sprite < 8 {
+                        self.oam[sprite_index][2] & 0xfe
+                    } else {
+                        self.oam[sprite_index][2] | 0x01
+                    }
+                } else {
+                    self.oam[sprite_index][2]
+                };
 
-            for x_in_sprite in 0..8 {
-                println!("{}", x);
-                println!("{}", x_in_sprite);
-                if x + x_in_sprite >= 8 && x + x_in_sprite < 168 {
-                    let low =
-                        (self.read(tile_addr + ((y_in_sprite * 2) as u16)) >> (7 - x_in_sprite)) &
-                        0x1;
-                    let high =
-                        (self.read(tile_addr + ((y_in_sprite * 2 + 1) as u16)) >>
-                            (7 - x_in_sprite)) &
-                        0x1;
+                let tile_addr = 0x8000 + (tile_index as u16) * 16;
 
-                    let pixel_color = (high << 1) | low;
+                let palette = (sprite_attr >> 4) & 0x1;
 
-                    let pixel_id = match palette {
-                        0 => (self.obp0 >> (pixel_color * 2)) & 0x03,
-                        1 => (self.obp1 >> (pixel_color * 2)) & 0x03,
-                        _ => { 0 }
-                    };
+                for x_in_sprite in 0..8 {
+                    //println!("{}", x);
+                    //println!("{}", x_in_sprite);
 
-                    self.bg_buffer[
-                        (self.ly as usize) * SCREEN_WIDTH + ((x + x_in_sprite - 8) as usize)
-                    ] = pixel_id;
+                    if x + x_in_sprite >= 0 {
+                        let a = if x_flip { 7 - x_in_sprite } else { x_in_sprite };
+
+                        let low =
+                            (self.read(tile_addr + ((y_in_sprite * 2) as u16)) >> (7 - a)) & 0x1;
+                        let high =
+                            (self.read(tile_addr + ((y_in_sprite * 2 + 1) as u16)) >> (7 - a)) &
+                            0x1;
+
+                        let pixel_color = (high << 1) | low;
+
+                        let pixel_id = match palette {
+                            0 => (self.obp0 >> (pixel_color * 2)) & 0x03,
+                            1 => (self.obp1 >> (pixel_color * 2)) & 0x03,
+                            _ => { 0 }
+                        };
+
+                        if pixel_id != 0 {
+                            self.buffer[
+                                ((self.ly as u16) * (SCREEN_WIDTH as u16) +
+                                    ((x + x_in_sprite) as u16)) as usize
+                            ] = pixel_id;
+                        }
+                    }
                 }
             }
         }
     }
-
-    fn draw_window_line(&mut self) {}
 
     /*pub fn oam_scan(&mut self) {
         let mut buffer = [(0, 0, 0); 10];
@@ -390,19 +446,16 @@ impl GPU {
 
     pub fn render_line(&mut self) {
         self.draw_bg_line();
+        self.draw_window_line();
+        self.draw_sprite_line();
     }
 
     pub fn step(&mut self, m_cycles: u8) {
         // add cycle to clock as t cycles
 
         self.clock += (m_cycles * 4) as u16;
-        println!("{}", self.ly);
-        println!("{:?}", self.mode);
-
-        if self.oam != [[0; 4]; 40] {
-            println!("{:?}", self.oam);
-            panic!();
-        }
+        //println!("{}", self.ly);
+        //println!("{:?}", self.mode);
 
         match self.mode {
             // mode 2
@@ -410,8 +463,8 @@ impl GPU {
                 if self.clock >= OAM_CYCLES {
                     self.mode = Mode::Drawing;
                     self.clock %= OAM_CYCLES;
-                    self.oam_scan();
-                    println!("{:?}", self.oam_buffer);
+                    //self.oam_scan();
+                    //println!("{:?}", self.oam_buffer);
                 }
 
                 //TODO - add interrupt for stat
@@ -419,13 +472,17 @@ impl GPU {
                 if self.interrupt_stat {
                     self.interrupt_stat = false;
                 }
+
+                if self.int_2 {
+                    self.interrupt_stat = true;
+                }
             }
             // mode 3
             Mode::Drawing => {
                 if self.clock >= DRAW_CYCLES {
                     self.mode = Mode::HBlank;
                     self.clock %= DRAW_CYCLES;
-                    self.draw_bg_line();
+                    self.render_line();
                     // self.draw_sprite_line();
                 }
             }
@@ -439,18 +496,21 @@ impl GPU {
                         self.interrupt_stat = true;
                     }
 
-                    if self.ly >= 143 {
+                    if self.ly > 143 {
                         self.mode = Mode::VBlank;
                         self.interrupt_vblank = true;
                     } else {
                         self.mode = Mode::OAMScan;
                     }
+
+                    if self.int_0 {
+                        self.interrupt_stat = true;
+                    }
                 }
             }
+
             // mode 1
             Mode::VBlank => {
-                self.interrupt_vblank = false;
-
                 if self.clock >= VBLANK_CYCLES {
                     self.ly += 1;
                     self.clock %= VBLANK_CYCLES;
@@ -459,6 +519,10 @@ impl GPU {
                 if self.ly > 153 {
                     self.ly = 0;
                     self.mode = Mode::OAMScan;
+                }
+
+                if self.int_1 {
+                    self.interrupt_stat = true;
                 }
             }
         }

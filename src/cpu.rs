@@ -42,15 +42,23 @@ impl CPU {
 
     fn fetch_word(&mut self) -> u16 {
         let word = self.mmu.read_word(self.registers.pc);
-        self.registers.pc += 2;
+        self.registers.pc = self.registers.pc.wrapping_add(2);
         word
     }
 
     fn handle_interrupt(&mut self) -> bool {
         let interrupts = self.mmu.inte & self.mmu.intf;
-        self.halted = false;
 
-        if !self.ime || interrupts == 0 {
+        if self.ime == false && self.halted == false {
+            return false;
+        }
+
+        if interrupts == 0 {
+            return false;
+        }
+
+        self.halted = false;
+        if self.ime == false {
             return false;
         }
 
@@ -107,7 +115,7 @@ impl CPU {
         println!("PROGRAM COUNTER: 0x{:04X}", self.registers.pc);
         let opcode = self.fetch();
         println!("Instruction {:2X}", opcode);
-        println!("{:?}", self.registers);
+        //println!("{:?}", self.registers);
         match opcode {
             0x00 => { 1 }
 
@@ -341,8 +349,8 @@ impl CPU {
             // ld b
             0x40 => {
                 self.registers.b = self.registers.b;
-                self.halted = true;
-                panic!("end");
+                //self.halted = true;
+                //panic!("end");
                 1
             }
             0x41 => {
@@ -1088,7 +1096,7 @@ impl CPU {
                 3
             }
             0xf1 => {
-                let value = self.pop();
+                let value = self.pop() & 0xfff0;
                 self.registers.set_af(value);
                 3
             }
@@ -1100,7 +1108,7 @@ impl CPU {
                     self.registers.pc = self.fetch_word();
                     6
                 } else {
-                    self.registers.pc += 2;
+                    self.registers.pc = self.registers.pc.wrapping_add(2);
                     3
                 }
             }
@@ -1110,7 +1118,7 @@ impl CPU {
                     self.registers.pc = self.fetch_word();
                     6
                 } else {
-                    self.registers.pc += 2;
+                    self.registers.pc = self.registers.pc.wrapping_add(2);
                     3
                 }
             }
@@ -1120,7 +1128,7 @@ impl CPU {
                     self.registers.pc = self.fetch_word();
                     6
                 } else {
-                    self.registers.pc += 2;
+                    self.registers.pc = self.registers.pc.wrapping_add(2);
                     3
                 }
             }
@@ -1130,7 +1138,7 @@ impl CPU {
                     self.registers.pc = self.fetch_word();
                     6
                 } else {
-                    self.registers.pc += 2;
+                    self.registers.pc = self.registers.pc.wrapping_add(2);
                     3
                 }
             }
@@ -1237,7 +1245,7 @@ impl CPU {
                     self.jump();
                     3
                 } else {
-                    self.registers.pc += 1;
+                    self.registers.pc = self.registers.pc.wrapping_add(1);
                     2
                 }
             }
@@ -1247,7 +1255,7 @@ impl CPU {
                     self.jump();
                     3
                 } else {
-                    self.registers.pc += 1;
+                    self.registers.pc = self.registers.pc.wrapping_add(1);
                     2
                 }
             }
@@ -1262,7 +1270,7 @@ impl CPU {
                     self.jump();
                     3
                 } else {
-                    self.registers.pc += 1;
+                    self.registers.pc = self.registers.pc.wrapping_add(1);
                     2
                 }
             }
@@ -1272,7 +1280,7 @@ impl CPU {
                     self.jump();
                     3
                 } else {
-                    self.registers.pc += 1;
+                    self.registers.pc = self.registers.pc.wrapping_add(1);
                     2
                 }
             }
@@ -1286,7 +1294,7 @@ impl CPU {
                     self.registers.pc = self.fetch_word();
                     4
                 } else {
-                    self.registers.pc += 2;
+                    self.registers.pc = self.registers.pc.wrapping_add(2);
                     3
                 }
             }
@@ -1296,7 +1304,7 @@ impl CPU {
                     self.registers.pc = self.fetch_word();
                     4
                 } else {
-                    self.registers.pc += 2;
+                    self.registers.pc = self.registers.pc.wrapping_add(2);
                     3
                 }
             }
@@ -1306,7 +1314,7 @@ impl CPU {
                     self.registers.pc = self.fetch_word();
                     4
                 } else {
-                    self.registers.pc += 2;
+                    self.registers.pc = self.registers.pc.wrapping_add(2);
                     3
                 }
             }
@@ -1316,7 +1324,7 @@ impl CPU {
                     self.registers.pc = self.fetch_word();
                     4
                 } else {
-                    self.registers.pc += 2;
+                    self.registers.pc = self.registers.pc.wrapping_add(2);
                     3
                 }
             }
@@ -1328,7 +1336,7 @@ impl CPU {
 
             // interrupts
             0xf3 => {
-                self.ei = 2;
+                self.di = 2;
                 1
             }
 
@@ -1338,8 +1346,8 @@ impl CPU {
             }
 
             0xd9 => {
-                self.ei = 1;
                 self.registers.pc = self.pop();
+                self.ei = 1;
                 4
             }
 
@@ -2495,14 +2503,15 @@ impl CPU {
 
     fn adc(&mut self, value: u8) {
         // add carry
-        let (intermediate, intermediate_overflow) = self.registers.a.overflowing_add(value);
-        let (new_value, did_overflow) = intermediate.overflowing_add(self.registers.f.carry as u8);
+
+        let c = self.registers.f.carry as u8;
+
+        let new_value = self.registers.a.wrapping_add(value).wrapping_add(c);
         self.registers.f.zero = new_value == 0;
         self.registers.f.subtract = false;
-        self.registers.f.carry = did_overflow | intermediate_overflow;
+        self.registers.f.carry = (self.registers.a as u16) + (value as u16) + (c as u16) > 0xff;
+        self.registers.f.half_carry = (self.registers.a & 0x0f) + (value & 0x0f) + c > 0x0f;
 
-        self.registers.f.half_carry =
-            (self.registers.a & 0xf) + (value & 0xf) + (self.registers.f.carry as u8) > 0xf;
         self.registers.a = new_value;
     }
 
@@ -2520,15 +2529,14 @@ impl CPU {
 
     fn sbc(&mut self, value: u8) {
         // subtract carry
-        let (intermediate, intermediate_overflow) = self.registers.a.overflowing_sub(value);
-        let (new_value, did_overflow) = intermediate.overflowing_sub(self.registers.f.carry as u8);
+        let c = self.registers.f.carry as u8;
+
+        let new_value = self.registers.a.wrapping_sub(value).wrapping_sub(c);
         self.registers.f.zero = new_value == 0;
         self.registers.f.subtract = true;
-        self.registers.f.carry = did_overflow | intermediate_overflow;
+        self.registers.f.carry = (self.registers.a as u16) < (value as u16) + (c as u16);
+        self.registers.f.half_carry = self.registers.a & 0x0f < (value & 0x0f) + c;
 
-        // sees if lower nibble is greater, if is, then set half carry to true.
-        self.registers.f.half_carry =
-            self.registers.a & 0xf < (value & 0xf) + (self.registers.f.carry as u8);
         self.registers.a = new_value;
     }
 
@@ -2570,18 +2578,18 @@ impl CPU {
     }
 
     fn inc(&mut self, value: u8) -> u8 {
-        let (new_value, did_overflow) = value.overflowing_add(1);
+        let new_value = value.wrapping_add(1);
         self.registers.f.zero = new_value == 0;
         self.registers.f.subtract = false;
-        self.registers.f.half_carry = (value & 0xf) == 0xf;
+        self.registers.f.half_carry = (value & 0xf) + 1 > 0xf;
         new_value
     }
 
     fn dec(&mut self, value: u8) -> u8 {
-        let (new_value, did_overflow) = value.overflowing_sub(1);
+        let new_value = value.wrapping_sub(1);
         self.registers.f.zero = new_value == 0;
         self.registers.f.subtract = true;
-        self.registers.f.half_carry = (value & 0xf) == 0xf;
+        self.registers.f.half_carry = (value & 0xf) == 0;
         new_value
     }
 
@@ -2617,7 +2625,7 @@ impl CPU {
 
     fn pop(&mut self) -> u16 {
         let result = self.mmu.read_word(self.registers.sp);
-        self.registers.sp += 2;
+        self.registers.sp = self.registers.sp.wrapping_add(2);
         result
     }
 

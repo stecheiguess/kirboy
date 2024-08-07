@@ -68,7 +68,7 @@ impl Registers {
 
     pub fn set_af(&mut self, value: u16) {
         self.a = ((value & 0xff00) >> 8) as u8;
-        self.f = FlagsRegister::from((value & 0xff) as u8);
+        self.f = FlagsRegister::from((value & 0xf0) as u8);
     }
 
     pub fn get_de(&self) -> u16 {

@@ -9,6 +9,7 @@ pub struct Joypad {
     right: bool,
     direction: bool,
     action: bool,
+    pub interrupt: bool,
 }
 
 pub enum Input {
@@ -35,6 +36,7 @@ impl Joypad {
             right: false,
             direction: false,
             action: false,
+            interrupt: false,
         }
     }
 
@@ -62,6 +64,7 @@ impl Joypad {
     }
 
     pub fn key_down(&mut self, key: Input) {
+        let old = self.read();
         match key {
             Input::Right => {
                 self.right = true;
@@ -88,9 +91,14 @@ impl Joypad {
                 self.start = true;
             }
         }
+        let new = self.read();
+        if old != new {
+            self.interrupt = true;
+        }
     }
 
     pub fn key_up(&mut self, key: Input) {
+        let old = self.read();
         match key {
             Input::Right => {
                 self.right = false;
@@ -116,6 +124,10 @@ impl Joypad {
             Input::Start => {
                 self.start = false;
             }
+        }
+        let new = self.read();
+        if old != new {
+            self.interrupt = true;
         }
     }
 }
