@@ -91,7 +91,7 @@ impl CPU {
         };
     }
 
-    pub fn cycle(&mut self) -> u8 {
+    pub fn step(&mut self) -> u8 {
         self.update_interrupt();
 
         let m_cycles = if !self.handle_interrupt() {
@@ -102,22 +102,16 @@ impl CPU {
 
         self.mmu.step(m_cycles);
         m_cycles
-
-        //self.execute();
-
-        /*for n in 1..100 {
-            self.execute();
-            println!("{:?}", self.registers);
-        }*/
     }
 
     fn execute(&mut self) -> u8 {
-        println!("PROGRAM COUNTER: 0x{:04X}", self.registers.pc);
+        //println!("PROGRAM COUNTER: 0x{:04X}", self.registers.pc);
         let opcode = self.fetch();
-        println!("Instruction {:2X}", opcode);
+        //println!("Instruction {:2X}", opcode);
         //println!("{:?}", self.registers);
         match opcode {
             0x00 => { 1 }
+            0x10 => { 1 }
 
             // ld 16 bit
             0x01 => {
@@ -143,6 +137,11 @@ impl CPU {
                 3
             }
 
+            0xf9 => {
+                self.registers.sp = self.registers.get_hl();
+                2
+            }
+
             // ld 16, a
 
             0x02 => {
@@ -156,21 +155,13 @@ impl CPU {
             }
 
             0x22 => {
-                self.mmu.write_byte(self.registers.a, self.registers.get_hl());
-                //println!("{hl:?}", hl = self.registers.get_hl());
-                self.registers.set_hl(self.registers.get_hl() + 1);
+                self.mmu.write_byte(self.registers.a, self.registers.get_hli());
                 2
             }
 
             0x32 => {
-                self.mmu.write_byte(self.registers.a, self.registers.get_hl());
-                //println!("{hl:04X}", hl = self.registers.get_hl());
-                self.registers.set_hl(self.registers.get_hl() - 1);
-                2
-            }
+                self.mmu.write_byte(self.registers.a, self.registers.get_hld());
 
-            0xf9 => {
-                self.registers.sp = self.registers.get_hl();
                 2
             }
 
@@ -578,6 +569,8 @@ impl CPU {
                 2
             }
 
+            // halted
+
             0x76 => {
                 self.halted = true;
                 1
@@ -629,14 +622,12 @@ impl CPU {
             }
 
             0x2a => {
-                self.registers.a = self.mmu.read_byte(self.registers.get_hl());
-                self.registers.set_hl(self.registers.get_hl() + 1);
+                self.registers.a = self.mmu.read_byte(self.registers.get_hli());
                 2
             }
 
             0x3a => {
-                self.registers.a = self.mmu.read_byte(self.registers.get_hl());
-                self.registers.set_hl(self.registers.get_hl() - 1);
+                self.registers.a = self.mmu.read_byte(self.registers.get_hld());
                 2
             }
 
@@ -1027,9 +1018,8 @@ impl CPU {
             }
 
             0xf0 => {
-                let byte = self.fetch();
-                let value = self.mmu.read_byte(0xff00 | (byte as u16));
-                self.registers.a = value;
+                let address = 0xff00 | (self.fetch() as u16);
+                self.registers.a = self.mmu.read_byte(address);
                 3
             }
 
@@ -1056,9 +1046,11 @@ impl CPU {
             }
 
             // push
+
+            // this fucking opcode got my value and address turned around
             0x08 => {
-                let value = self.fetch_word();
-                self.mmu.write_word(value, self.registers.sp);
+                let address = self.fetch_word();
+                self.mmu.write_word(self.registers.sp, address);
                 5
             }
 
@@ -1351,7 +1343,7 @@ impl CPU {
                 4
             }
 
-            other => {
+            _ => {
                 //println!("Instruction {:2X} is not implemented", other);
                 1
             }
@@ -2595,22 +2587,26 @@ impl CPU {
 
     fn add16(&mut self, value: u16) {
         let word = self.registers.get_hl();
-        let (new_value, did_overflow) = word.overflowing_add(value);
-        self.registers.set_hl(new_value);
+        let new_value = word.wrapping_add(value);
 
         self.registers.f.subtract = false;
-        self.registers.f.carry = did_overflow;
-        self.registers.f.half_carry = (word & 0x07ff) + (value & 0x07ff) > 0x07ff;
+        self.registers.f.carry = word > 0xffff - value;
+        self.registers.f.half_carry = (word & 0x0fff) + (value & 0x0fff) > 0x0fff;
+
+        self.registers.set_hl(new_value);
     }
 
     fn add16e(&mut self, register: u16) -> u16 {
         let byte = self.fetch() as i8 as i16 as u16;
 
+        let new_value = register.wrapping_add(byte);
+
         self.registers.f.zero = false;
         self.registers.f.subtract = false;
         self.registers.f.half_carry = (register & 0x000f) + (byte & 0x000f) > 0x000f;
         self.registers.f.carry = (register & 0x00ff) + (byte & 0x00ff) > 0x00ff;
-        register.wrapping_add(byte)
+
+        new_value
     }
 
     fn jump(&mut self) {

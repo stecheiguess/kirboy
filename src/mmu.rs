@@ -142,7 +142,7 @@ impl MMU {
     pub fn write_word(&mut self, value: u16, address: u16) {
         // write in little endian
         self.write_byte((value & 0x00ff) as u8, address);
-        self.write_byte((value >> 8) as u8, address + 1);
+        self.write_byte((value >> 8) as u8, address.wrapping_add(1));
     }
 
     fn oam_dma(&mut self, value: u8) {

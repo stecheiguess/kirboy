@@ -382,7 +382,7 @@ impl GPU {
                     if y_in_sprite < 8 {
                         self.oam[sprite_index][2] & 0xfe
                     } else {
-                        self.oam[sprite_index][2] | 0x01
+                        self.oam[sprite_index][2] & 0xff
                     }
                 } else {
                     self.oam[sprite_index][2]
@@ -413,7 +413,7 @@ impl GPU {
                             _ => { 0 }
                         };
 
-                        if pixel_id != 0 {
+                        if pixel_color != 0 {
                             self.buffer[
                                 ((self.ly as u16) * (SCREEN_WIDTH as u16) +
                                     ((x + x_in_sprite) as u16)) as usize
