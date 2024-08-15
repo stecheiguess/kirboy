@@ -4,8 +4,8 @@
 use std::convert;
 
 //use emulator::cartridge::Cartridge;
-use emulator::{ gpu, mmu };
-use env_logger::DEFAULT_WRITE_STYLE_ENV;
+//use emulator::{ gpu, mmu };
+//use env_logger::DEFAULT_WRITE_STYLE_ENV;
 use error_iter::ErrorIter as _;
 use log::error;
 use pixels::{ Error, Pixels, SurfaceTexture };
@@ -17,28 +17,23 @@ use winit_input_helper::WinitInputHelper;
 use std::time::{ Instant };
 use winit::platform::macos::WindowBuilderExtMacOS;
 
-use emulator::cpu::{ self, CPU };
+use emulator::cpu::{ CPU };
 
 const WIDTH: u32 = 160;
 const HEIGHT: u32 = 144;
 const BOX_SIZE: i16 = 64;
 
 const AFTER_BOOT: bool = true;
-const ROM: &str = "flappy.gb";
+const ROM: &str = "drmario.gb";
 
-/// Representation of the application state. In this example, a box will bounce around the screen.
 struct Screen {
-    /*box_x: i16,
-    box_y: i16,
-    velocity_x: i16,
-    velocity_y: i16,*/
     cpu: CPU,
 }
 
 fn main() -> Result<(), Error> {
     env_logger::init();
 
-    //println!("{:?}", toTile(logo));
+    let mut screen = Screen::new();
 
     let event_loop = EventLoop::new();
     let mut input = WinitInputHelper::new();
@@ -46,7 +41,7 @@ fn main() -> Result<(), Error> {
         let size = LogicalSize::new(WIDTH as f64, HEIGHT as f64);
 
         WindowBuilder::new()
-            .with_title("Hello Pixels")
+            .with_title(screen.title())
             .with_inner_size(size)
             .with_min_inner_size(size)
             .with_titlebar_transparent(true)
@@ -54,36 +49,11 @@ fn main() -> Result<(), Error> {
             .unwrap()
     };
 
-    /*let tile_window = {
-        let size = LogicalSize::new((24 * 8) as f64, (16 * 8) as f64);
-
-        WindowBuilder::new()
-            .with_title("Tile Window")
-            .with_inner_size(size)
-            .with_min_inner_size(size)
-            .build(&event_loop)
-            .unwrap()
-    };*/
-
     let mut pixels = {
         let window_size = window.inner_size();
         let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
         Pixels::new(WIDTH, HEIGHT, surface_texture)?
     };
-
-    /*let mut tiles = {
-        let window_size = tile_window.inner_size();
-        let surface_texture = SurfaceTexture::new(
-            window_size.width,
-            window_size.height,
-            &tile_window
-        );
-        Pixels::new(24, 16, surface_texture)?
-    };*/
-
-    let mut screen = Screen::new();
-    //let mut now = Instant::now();
-    //let mut cycles: u16 = 0;
 
     let mut now = Instant::now();
 
@@ -98,13 +68,6 @@ fn main() -> Result<(), Error> {
                 return;
             }
         }
-
-        /* cycles = cycles.wrapping_add(screen.cpu.cycle() as u16);
-        if cycles >= 17496 {
-            cycles = 0;
-            while now.elapsed().as_millis() < (16.67 as u128) {}
-            now = Instant::now();
-        }*/
 
         if now.elapsed().as_millis() >= (16.75 as u128) {
             screen.update();
@@ -193,8 +156,6 @@ fn main() -> Result<(), Error> {
                     return;
                 }
             }
-
-            // Update internal state and request a redraw
         }
     });
 }
@@ -209,16 +170,11 @@ fn log_error<E: std::error::Error + 'static>(method_name: &str, err: E) {
 impl Screen {
     /// Create a new `World` instance that can draw a moving box.
     fn new() -> Self {
-        let rom = std::fs::read(ROM).unwrap();
+        let rom: Vec<u8> = std::fs::read(ROM).unwrap();
 
         //Cartridge::new(ROM);
 
-        let mut CPU = if AFTER_BOOT { CPU::new_wb() } else { CPU::new() };
-
-        for (position, &byte) in rom.iter().enumerate() {
-            //println!("{:X?}", byte);
-            CPU.mmu.write_byte(byte, position as u16);
-        }
+        let mut CPU = if AFTER_BOOT { CPU::new_wb(rom) } else { CPU::new(rom) };
 
         /*let boot = std::fs::read("boot.bin").unwrap();
 
@@ -228,54 +184,30 @@ impl Screen {
         }*/
 
         Self {
-            //box_x: 24,
-            //box_y: 16,
-            //velocity_x: 1,
-            //velocity_y: 1,
             cpu: CPU,
         }
     }
 
-    /// Update the `World` internal state; bounce the box around the screen.
-    fn update(&mut self) {
-        let mut cycle_count: u16 = 0;
-        while cycle_count < 17496 {
-            cycle_count = cycle_count.wrapping_add(self.cpu.step() as u16);
-        }
-        /*if x % 2 == 0 {
-                self.cpu.mmu.joypad.key_down(emulator::joypad::Input::Right);
-            } else {
-                self.cpu.mmu.joypad.key_up(emulator::joypad::Input::Right);
-            }*/
-        //println!("{}", self.cpu.mmu.joypad.interrupt);
+    fn title(&self) -> String {
+        self.cpu.mmu.cartridge.title()
     }
 
-    /// Draw the `World` state to the frame buffer.
-    ///
-    /// Assumes the default texture format: `wgpu::TextureFormat::Rgba8UnormSrgb`
+    // runs as many cycle counts before updating screen..
+    fn update(&mut self) {
+        let mut cycle_count: u16 = 0;
+        while cycle_count < 17556 {
+            cycle_count = cycle_count.wrapping_add(self.cpu.step() as u16);
+        }
+    }
+
     fn draw(&self, frame: &mut [u8]) {
         let screen = self.cpu.mmu.gpu.buffer;
         for (i, pixel) in frame.chunks_exact_mut(4).enumerate() {
-            /*
-            let inside_the_box =
-                x >= self.box_x &&
-                x < self.box_x + BOX_SIZE &&
-                y >= self.box_y &&
-                y < self.box_y + BOX_SIZE;
-
-            let rgba = if inside_the_box {
-                [0x5e, 0x48, 0xe8, 0xff]
-            } else {
-                [0x48, 0xb2, 0xe8, 0xff]
-            };
-
-            pixel.copy_from_slice(&rgba);*/
-
             let rgba = match screen[i] {
-                0 => [0xff, 0xff, 0xff, 0xff],
-                1 => [0xcb, 0xcc, 0xcc, 0xff],
-                2 => [0x77, 0x77, 0x77, 0xff],
-                3 => [0x00, 0x00, 0x00, 0xff],
+                0 => [0xff, 0xff, 0xff, 0xff], // white
+                1 => [0xcb, 0xcc, 0xcc, 0xff], // light gray
+                2 => [0x77, 0x77, 0x77, 0xff], // dark gray
+                3 => [0x00, 0x00, 0x00, 0xff], // black
 
                 _ => [0x00, 0x00, 0x00, 0xff],
             };

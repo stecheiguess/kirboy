@@ -1,13 +1,13 @@
 use std::{ fs::File, io::{ Read, SeekFrom, Seek }, vec };
 
-//use crate::mbc::MBC;
+use crate::mbc::MBC;
 
 pub struct Cartridge {
-    //mbc: dyn MBC,
+    mbc: Box<dyn MBC>,
 }
 
 impl Cartridge {
-    pub fn new(file: &str) -> Self {
+    pub fn new(file: &str) {
         let mut rom = File::open(file).unwrap();
         rom.seek(SeekFrom::Start(0x100));
 
@@ -19,6 +19,6 @@ impl Cartridge {
 
         let mbc = println!("{:02X?}", header);
 
-        Self {}
+        //Self {}
     }
 }

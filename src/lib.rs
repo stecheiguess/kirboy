@@ -7,4 +7,4 @@ pub mod registers;
 pub mod timer;
 pub mod cpu;
 pub mod cartridge;
-//pub mod mbc;
+pub mod mbc;

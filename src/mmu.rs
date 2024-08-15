@@ -1,10 +1,9 @@
-use crate::{ gpu::GPU, joypad::Joypad, timer::Timer };
+use crate::{ gpu::GPU, joypad::Joypad, mbc::{ new, MBC }, timer::Timer };
 
 pub struct MMU {
     //gpu: GPU,
     //ram: [u8; 0x10000],
-    rom0: [u8; 0x4000],
-    rom1: [u8; 0x4000],
+
     xram: [u8; 0x2000],
     pub gpu: GPU,
     pub joypad: Joypad,
@@ -14,13 +13,12 @@ pub struct MMU {
     hram: [u8; 0x007f],
     ram: [u8; 0x10000],
     pub timer: Timer,
+    pub cartridge: Box<dyn MBC>,
 }
 
 impl MMU {
-    pub fn new() -> Self {
+    pub fn new(data: Vec<u8>) -> Self {
         Self {
-            rom0: [0; 0x4000],
-            rom1: [0; 0x4000],
             xram: [0; 0x2000],
             gpu: GPU::new(),
             joypad: Joypad::new(),
@@ -30,11 +28,12 @@ impl MMU {
             intf: 0,
             hram: [0; 0x007f],
             ram: [0; 0x10000],
+            cartridge: new(data),
         }
     }
 
-    pub fn init() -> Self {
-        let mut mmu = MMU::new();
+    pub fn init(data: Vec<u8>) -> Self {
+        let mut mmu = MMU::new(data);
         mmu.write_byte(0x80, 0xff10);
         mmu.write_byte(0xbf, 0xff11);
         mmu.write_byte(0xf3, 0xff12);
@@ -73,9 +72,9 @@ impl MMU {
 
     pub fn read_byte(&self, address: u16) -> u8 {
         match address {
-            0x0000..=0x3fff => { self.rom0[address as usize] }
-            0x4000..=0x7fff => { self.rom1[(address - 0x4000) as usize] }
+            0x0000..=0x7fff => { self.cartridge.read_rom(address) }
             0x8000..=0x9fff => { self.gpu.read(address) }
+            0xa000..=0xbfff => { self.cartridge.read_ram(address) }
             0xfe00..=0xfe9f => { self.gpu.read(address) }
             0xff00 => { self.joypad.read() }
 
@@ -99,13 +98,9 @@ impl MMU {
 
     pub fn write_byte(&mut self, value: u8, address: u16) {
         match address {
-            0x0000..=0x3fff => {
-                self.rom0[address as usize] = value;
-            }
-            0x4000..=0x7fff => {
-                self.rom1[(address - 0x4000) as usize] = value;
-            }
+            0x0000..=0x7fff => { self.cartridge.write_rom(value, address) }
             0x8000..=0x9fff => { self.gpu.write(value, address) }
+            0xa000..=0xbfff => { self.cartridge.write_ram(value, address) }
             0xfe00..=0xfe9f => { self.gpu.write(value, address) }
             0xff00 => { self.joypad.write(value) }
 

@@ -12,10 +12,10 @@ pub struct CPU {
 }
 
 impl CPU {
-    pub fn new() -> Self {
+    pub fn new(cartridge: Vec<u8>) -> Self {
         Self {
             registers: Registers::new(),
-            mmu: MMU::new(),
+            mmu: MMU::new(cartridge),
             ime: false,
             halted: false,
             di: 0,
@@ -23,10 +23,10 @@ impl CPU {
         }
     }
 
-    pub fn new_wb() -> Self {
+    pub fn new_wb(cartridge: Vec<u8>) -> Self {
         Self {
             registers: Registers::init(),
-            mmu: MMU::init(),
+            mmu: MMU::init(cartridge),
             ime: false,
             halted: false,
             di: 0,

@@ -451,8 +451,11 @@ impl GPU {
     }
 
     pub fn step(&mut self, m_cycles: u8) {
-        // add cycle to clock as t cycles
+        if !self.control.lcd_enable {
+            return;
+        }
 
+        // add cycle to clock as t cycles
         self.clock += (m_cycles * 4) as u16;
         //println!("{}", self.ly);
         //println!("{:?}", self.mode);
@@ -514,11 +517,11 @@ impl GPU {
                 if self.clock >= VBLANK_CYCLES {
                     self.ly += 1;
                     self.clock %= VBLANK_CYCLES;
-                }
 
-                if self.ly > 153 {
-                    self.ly = 0;
-                    self.mode = Mode::OAMScan;
+                    if self.ly > 153 {
+                        self.ly = 0;
+                        self.mode = Mode::OAMScan;
+                    }
                 }
 
                 if self.int_1 {
@@ -527,12 +530,4 @@ impl GPU {
             }
         }
     }
-}
-
-fn byte_to_bit_array(byte: u8) -> [u8; 8] {
-    let mut bitarray: [u8; 8] = [0; 8];
-    for i in 0..8 {
-        bitarray[7 - i] = (&byte >> i) & 0x01;
-    }
-    bitarray
 }
