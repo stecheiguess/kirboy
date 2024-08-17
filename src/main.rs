@@ -1,6 +1,7 @@
 #![deny(clippy::all)]
 #![forbid(unsafe_code)]
 
+use emulator::Emulator;
 //use kirboy::cartridge::Cartridge;
 //use kirboy::{ gpu, mmu };
 //use env_logger::DEFAULT_WRITE_STYLE_ENV;
@@ -9,14 +10,14 @@ use log::error;
 use pixels::{ Error, Pixels, SurfaceTexture };
 use winit::dpi::LogicalSize;
 use winit::event::{ Event, VirtualKeyCode };
-use winit::event_loop::{ ControlFlow, EventLoop };
-use winit::window::WindowBuilder;
+use winit::event_loop::{ ControlFlow, EventLoop, EventLoopBuilder };
+use winit::window::{ self, WindowBuilder };
 use winit_input_helper::WinitInputHelper;
 use std::path::PathBuf;
 use std::time::{ Instant };
 use winit::platform::macos::WindowBuilderExtMacOS;
 
-use kirboy::cpu::{ CPU };
+use emulator::joypad::Input;
 
 use rfd::FileDialog;
 
@@ -34,6 +35,11 @@ use muda::{
     Submenu,
 };
 
+mod emulator;
+
+#[cfg(target_os = "macos")]
+use winit::platform::macos::{ EventLoopBuilderExtMacOS, WindowExtMacOS };
+
 const WIDTH: u32 = 160;
 const HEIGHT: u32 = 144;
 const BOX_SIZE: i16 = 64;
@@ -41,51 +47,24 @@ const BOX_SIZE: i16 = 64;
 const AFTER_BOOT: bool = true;
 const ROM: &str = "drmario.gb";
 
-struct Screen {
-    cpu: CPU,
-}
-
 fn main() -> Result<(), Error> {
     env_logger::init();
 
-    let file = FileDialog::new()
-        .add_filter("gameboy rom", &["gb"])
-        .set_directory("/")
-        .pick_file()
-        .unwrap();
+    // file open dialog
 
-    println!("{:?}", file);
+    // screen init.
+    let mut emulator = Emulator::new(file_dialog());
 
-    let menu = Menu::new();
-    #[cfg(target_os = "macos")]
-    {
-        let app_m = Submenu::new("App", true);
-        menu.append(&app_m);
-        app_m.append_items(
-            &[
-                &PredefinedMenuItem::about(None, None),
-                &PredefinedMenuItem::separator(),
-                &PredefinedMenuItem::services(None),
-                &PredefinedMenuItem::separator(),
-                &PredefinedMenuItem::hide(None),
-                &PredefinedMenuItem::hide_others(None),
-                &PredefinedMenuItem::show_all(None),
-                &PredefinedMenuItem::separator(),
-                &PredefinedMenuItem::quit(None),
-            ]
-        );
-    }
+    // event loop for window.
+    let event_loop = { EventLoopBuilder::new().with_default_menu(false).build() };
 
-    //scrren
-    let mut screen = Screen::new(file);
-
-    let event_loop = EventLoop::new();
     let mut input = WinitInputHelper::new();
+
     let window = {
-        let size = LogicalSize::new(WIDTH as f64, HEIGHT as f64);
+        let size = LogicalSize::new((WIDTH * 2) as f64, (HEIGHT * 2) as f64);
 
         WindowBuilder::new()
-            .with_title(screen.title())
+            .with_title(emulator.title())
             .with_inner_size(size)
             .with_min_inner_size(size)
             .with_titlebar_transparent(true)
@@ -99,21 +78,14 @@ fn main() -> Result<(), Error> {
         Pixels::new(WIDTH, HEIGHT, surface_texture)?
     };
 
-    #[cfg(target_os = "windows")]
-    menu.init_for_hwnd(window.hwnd() as isize);
-    #[cfg(target_os = "linux")]
-    menu.init_for_gtk_window(&gtk_window, Some(&vertical_gtk_box));
-    #[cfg(target_os = "macos")]
-    {
-        menu.init_for_nsapp();
-    }
+    menu(&window);
 
     let mut now = Instant::now();
 
     event_loop.run(move |event, _, control_flow| {
-        // Draw the current frame
         if let Event::RedrawRequested(_) = event {
-            screen.draw(pixels.frame_mut());
+            // Draw the current frame
+            emulator.draw(pixels.frame_mut());
 
             if let Err(err) = pixels.render() {
                 log_error("pixels.render", err);
@@ -123,7 +95,6 @@ fn main() -> Result<(), Error> {
         }
 
         if now.elapsed().as_millis() >= (16.75 as u128) {
-            screen.update();
             window.request_redraw();
             now = Instant::now();
         }
@@ -137,67 +108,67 @@ fn main() -> Result<(), Error> {
             }
 
             if input.key_pressed(VirtualKeyCode::W) {
-                screen.cpu.mmu.joypad.key_down(kirboy::joypad::Input::Up);
+                emulator.key_down(Input::Up);
                 return;
             }
             if input.key_released(VirtualKeyCode::W) {
-                screen.cpu.mmu.joypad.key_up(kirboy::joypad::Input::Up);
+                emulator.key_up(Input::Up);
                 return;
             }
             if input.key_pressed(VirtualKeyCode::A) {
-                screen.cpu.mmu.joypad.key_down(kirboy::joypad::Input::Left);
+                emulator.key_down(Input::Left);
                 return;
             }
             if input.key_released(VirtualKeyCode::A) {
-                screen.cpu.mmu.joypad.key_up(kirboy::joypad::Input::Left);
+                emulator.key_up(Input::Left);
                 return;
             }
             if input.key_pressed(VirtualKeyCode::S) {
-                screen.cpu.mmu.joypad.key_down(kirboy::joypad::Input::Down);
+                emulator.key_down(Input::Down);
                 return;
             }
             if input.key_released(VirtualKeyCode::S) {
-                screen.cpu.mmu.joypad.key_up(kirboy::joypad::Input::Down);
+                emulator.key_up(Input::Down);
                 return;
             }
             if input.key_pressed(VirtualKeyCode::D) {
-                screen.cpu.mmu.joypad.key_down(kirboy::joypad::Input::Right);
+                emulator.key_down(Input::Right);
                 return;
             }
             if input.key_released(VirtualKeyCode::D) {
-                screen.cpu.mmu.joypad.key_up(kirboy::joypad::Input::Right);
+                emulator.key_up(Input::Right);
                 return;
             }
             if input.key_pressed(VirtualKeyCode::Comma) {
-                screen.cpu.mmu.joypad.key_down(kirboy::joypad::Input::B);
+                emulator.key_down(Input::B);
                 return;
             }
             if input.key_released(VirtualKeyCode::Comma) {
-                screen.cpu.mmu.joypad.key_up(kirboy::joypad::Input::B);
+                emulator.key_up(Input::B);
                 return;
             }
             if input.key_pressed(VirtualKeyCode::Period) {
-                screen.cpu.mmu.joypad.key_down(kirboy::joypad::Input::A);
+                emulator.key_down(Input::A);
                 return;
             }
             if input.key_released(VirtualKeyCode::Period) {
-                screen.cpu.mmu.joypad.key_up(kirboy::joypad::Input::A);
+                emulator.key_up(Input::A);
                 return;
             }
             if input.key_pressed(VirtualKeyCode::RShift) {
-                screen.cpu.mmu.joypad.key_down(kirboy::joypad::Input::Select);
+                emulator.key_down(Input::Select);
                 return;
             }
             if input.key_released(VirtualKeyCode::RShift) {
-                screen.cpu.mmu.joypad.key_up(kirboy::joypad::Input::Select);
+                emulator.key_up(Input::Select);
                 return;
             }
             if input.key_pressed(VirtualKeyCode::Return) {
-                screen.cpu.mmu.joypad.key_down(kirboy::joypad::Input::Start);
+                emulator.key_down(Input::Start);
                 return;
             }
             if input.key_released(VirtualKeyCode::Return) {
-                screen.cpu.mmu.joypad.key_up(kirboy::joypad::Input::Start);
+                emulator.key_up(Input::Start);
                 return;
             }
 
@@ -220,53 +191,55 @@ fn log_error<E: std::error::Error + 'static>(method_name: &str, err: E) {
     }
 }
 
-impl Screen {
-    /// Create a new `World` instance that can draw a moving box.
-    fn new(file: PathBuf) -> Self {
-        let rom: Vec<u8> = std::fs::read(file).unwrap();
-
-        //Cartridge::new(ROM);
-
-        let mut CPU = if AFTER_BOOT { CPU::new_wb(rom) } else { CPU::new(rom) };
-
-        /*let boot = std::fs::read("boot.bin").unwrap();
-
-        for (position, &byte) in boot.iter().enumerate() {
-            //println!("{:X?}", byte);
-            CPU.mmu.write_byte(byte, position as u16);
-        }*/
-
-        Self {
-            cpu: CPU,
-        }
+fn menu(window: &window::Window) {
+    // menu init.
+    let menu = Menu::new();
+    #[cfg(target_os = "macos")]
+    {
+        let app_m = Submenu::new("App", true);
+        menu.append(&app_m);
+        app_m.append_items(
+            &[
+                &PredefinedMenuItem::about(None, None),
+                &PredefinedMenuItem::separator(),
+                &PredefinedMenuItem::services(None),
+                &PredefinedMenuItem::separator(),
+                &PredefinedMenuItem::hide(None),
+                &PredefinedMenuItem::hide_others(None),
+                &PredefinedMenuItem::show_all(None),
+                &PredefinedMenuItem::separator(),
+                &PredefinedMenuItem::quit(None),
+            ]
+        );
     }
 
-    fn title(&self) -> String {
-        self.cpu.mmu.cartridge.title()
+    let file_m = Submenu::new("&File", true);
+    let edit_m = Submenu::new("&Edit", true);
+
+    menu.append_items(&[&file_m, &edit_m]);
+
+    let check_custom_i_1 = CheckMenuItem::new("Check Custom 1", true, true, None);
+    let check_custom_i_2 = CheckMenuItem::new("Check Custom 2", false, true, None);
+
+    file_m.append_items(&[&check_custom_i_1, &PredefinedMenuItem::separator(), &check_custom_i_2]);
+
+    #[cfg(target_os = "windows")]
+    menu.init_for_hwnd(window.hwnd() as isize);
+    #[cfg(target_os = "linux")]
+    menu.init_for_gtk_window(&gtk_window, Some(&vertical_gtk_box));
+    #[cfg(target_os = "macos")]
+    {
+        menu.init_for_nsapp();
     }
+}
 
-    // runs as many cycle counts before updating screen..
-    fn update(&mut self) {
-        let mut cycle_count: u16 = 0;
-        while cycle_count < 17556 {
-            cycle_count = cycle_count.wrapping_add(self.cpu.step() as u16);
-        }
-    }
+fn file_dialog() -> PathBuf {
+    let file = FileDialog::new()
+        .add_filter("gameboy rom", &["gb"])
+        .set_directory("/")
+        .pick_file()
+        .unwrap();
 
-    fn draw(&self, frame: &mut [u8]) {
-        let screen = self.cpu.mmu.gpu.buffer;
-        for (i, pixel) in frame.chunks_exact_mut(4).enumerate() {
-            let rgba = match screen[i] {
-                0 => [0xff, 0xff, 0xff, 0xff], // white
-                1 => [0xcb, 0xcc, 0xcc, 0xff], // light gray
-                2 => [0x77, 0x77, 0x77, 0xff], // dark gray
-                3 => [0x00, 0x00, 0x00, 0xff], // black
-
-                _ => [0x00, 0x00, 0x00, 0xff],
-            };
-
-            pixel.copy_from_slice(&rgba);
-            //println!("{i:?}");
-        }
-    }
+    println!("{:?}", file);
+    file
 }

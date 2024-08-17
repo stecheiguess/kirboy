@@ -9,12 +9,18 @@ pub struct MBC1 {
     rom_banks: usize,
     ram_banks: usize,
     mode: bool, // 1 = advanced, 0 = simple
+    battery: bool,
 }
 
 impl MBC1 {
     pub fn new(data: Vec<u8>) -> Self {
         let rom_banks = rom_banks(data[0x148]);
         let ram_banks = ram_banks(data[0x149]);
+
+        let battery = match data[0x147] {
+            0x03 => true,
+            _ => false,
+        };
 
         Self {
             rom: data,
@@ -25,6 +31,7 @@ impl MBC1 {
             rom_banks,
             ram_banks,
             mode: false,
+            battery,
         }
     }
 
@@ -136,5 +143,15 @@ impl MBC for MBC1 {
 
             _ => {}
         }
+    }
+
+    fn load_ram(&mut self, data: Vec<u8>) {
+        if self.battery {
+            self.ram = data;
+        }
+    }
+
+    fn save_ram(&self) -> Option<Vec<u8>> {
+        if self.battery { Some(self.ram.clone()) } else { None }
     }
 }

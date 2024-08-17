@@ -12,6 +12,10 @@ pub trait MBC {
 
     fn write_ram(&mut self, value: u8, address: u16);
 
+    fn load_ram(&mut self, data: Vec<u8>);
+
+    fn save_ram(&self) -> Option<Vec<u8>>;
+
     fn title(&self) -> String {
         let mut title = String::with_capacity(TITLE_LENGTH);
 

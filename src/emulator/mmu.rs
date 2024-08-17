@@ -1,4 +1,4 @@
-use crate::{ gpu::GPU, joypad::Joypad, mbc::{ new, MBC }, timer::Timer };
+use crate::emulator::{ gpu::GPU, joypad::Joypad, mbc::{ new, MBC }, timer::Timer };
 
 pub struct MMU {
     //gpu: GPU,

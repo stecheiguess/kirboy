@@ -1,5 +1,4 @@
-use crate::mmu::MMU;
-use crate::registers::Registers;
+use crate::emulator::{ mmu::MMU, registers::Registers };
 
 // cpu
 pub struct CPU {

@@ -25,4 +25,10 @@ impl MBC for MBC0 {
     fn write_rom(&mut self, _value: u8, _address: u16) {
         return;
     }
+
+    fn load_ram(&mut self, data: Vec<u8>) {}
+
+    fn save_ram(&self) -> Option<Vec<u8>> {
+        None
+    }
 }
