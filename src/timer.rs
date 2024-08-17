@@ -37,7 +37,6 @@ impl Timer {
         match address {
             0xff04 => {
                 self.div = 0;
-                self.clock = 0;
             }
             0xff05 => {
                 self.tima = value;

@@ -57,17 +57,19 @@ impl MMU {
     }
 
     pub fn step(&mut self, m_cycles: u8) {
-        self.gpu.step(m_cycles);
         self.timer.step(m_cycles);
-
-        self.intf |= self.gpu.interrupt_vblank as u8;
-        self.gpu.interrupt_vblank = false;
-        self.intf |= (self.gpu.interrupt_stat as u8) << 1;
-        self.gpu.interrupt_stat = false;
-        self.intf |= (self.joypad.interrupt as u8) << 4;
-        self.joypad.interrupt = false;
         self.intf |= (self.timer.interrupt as u8) << 2;
         self.timer.interrupt = false;
+
+        self.intf |= (self.joypad.interrupt as u8) << 4;
+        self.joypad.interrupt = false;
+
+        self.gpu.step(m_cycles);
+        self.intf |= self.gpu.interrupt_vblank as u8;
+        self.gpu.interrupt_vblank = false;
+
+        self.intf |= (self.gpu.interrupt_stat as u8) << 1;
+        self.gpu.interrupt_stat = false;
     }
 
     pub fn read_byte(&self, address: u16) -> u8 {

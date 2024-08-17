@@ -1,10 +1,8 @@
 #![deny(clippy::all)]
 #![forbid(unsafe_code)]
 
-use std::convert;
-
-//use emulator::cartridge::Cartridge;
-//use emulator::{ gpu, mmu };
+//use kirboy::cartridge::Cartridge;
+//use kirboy::{ gpu, mmu };
 //use env_logger::DEFAULT_WRITE_STYLE_ENV;
 use error_iter::ErrorIter as _;
 use log::error;
@@ -14,10 +12,27 @@ use winit::event::{ Event, VirtualKeyCode };
 use winit::event_loop::{ ControlFlow, EventLoop };
 use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
+use std::path::PathBuf;
 use std::time::{ Instant };
 use winit::platform::macos::WindowBuilderExtMacOS;
 
-use emulator::cpu::{ CPU };
+use kirboy::cpu::{ CPU };
+
+use rfd::FileDialog;
+
+use muda::{
+    accelerator::{ Accelerator, Code, Modifiers },
+    dpi::{ PhysicalPosition, Position },
+    AboutMetadata,
+    CheckMenuItem,
+    ContextMenu,
+    IconMenuItem,
+    Menu,
+    MenuEvent,
+    MenuItem,
+    PredefinedMenuItem,
+    Submenu,
+};
 
 const WIDTH: u32 = 160;
 const HEIGHT: u32 = 144;
@@ -33,7 +48,36 @@ struct Screen {
 fn main() -> Result<(), Error> {
     env_logger::init();
 
-    let mut screen = Screen::new();
+    let file = FileDialog::new()
+        .add_filter("gameboy rom", &["gb"])
+        .set_directory("/")
+        .pick_file()
+        .unwrap();
+
+    println!("{:?}", file);
+
+    let menu = Menu::new();
+    #[cfg(target_os = "macos")]
+    {
+        let app_m = Submenu::new("App", true);
+        menu.append(&app_m);
+        app_m.append_items(
+            &[
+                &PredefinedMenuItem::about(None, None),
+                &PredefinedMenuItem::separator(),
+                &PredefinedMenuItem::services(None),
+                &PredefinedMenuItem::separator(),
+                &PredefinedMenuItem::hide(None),
+                &PredefinedMenuItem::hide_others(None),
+                &PredefinedMenuItem::show_all(None),
+                &PredefinedMenuItem::separator(),
+                &PredefinedMenuItem::quit(None),
+            ]
+        );
+    }
+
+    //scrren
+    let mut screen = Screen::new(file);
 
     let event_loop = EventLoop::new();
     let mut input = WinitInputHelper::new();
@@ -54,6 +98,15 @@ fn main() -> Result<(), Error> {
         let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
         Pixels::new(WIDTH, HEIGHT, surface_texture)?
     };
+
+    #[cfg(target_os = "windows")]
+    menu.init_for_hwnd(window.hwnd() as isize);
+    #[cfg(target_os = "linux")]
+    menu.init_for_gtk_window(&gtk_window, Some(&vertical_gtk_box));
+    #[cfg(target_os = "macos")]
+    {
+        menu.init_for_nsapp();
+    }
 
     let mut now = Instant::now();
 
@@ -84,67 +137,67 @@ fn main() -> Result<(), Error> {
             }
 
             if input.key_pressed(VirtualKeyCode::W) {
-                screen.cpu.mmu.joypad.key_down(emulator::joypad::Input::Up);
+                screen.cpu.mmu.joypad.key_down(kirboy::joypad::Input::Up);
                 return;
             }
             if input.key_released(VirtualKeyCode::W) {
-                screen.cpu.mmu.joypad.key_up(emulator::joypad::Input::Up);
+                screen.cpu.mmu.joypad.key_up(kirboy::joypad::Input::Up);
                 return;
             }
             if input.key_pressed(VirtualKeyCode::A) {
-                screen.cpu.mmu.joypad.key_down(emulator::joypad::Input::Left);
+                screen.cpu.mmu.joypad.key_down(kirboy::joypad::Input::Left);
                 return;
             }
             if input.key_released(VirtualKeyCode::A) {
-                screen.cpu.mmu.joypad.key_up(emulator::joypad::Input::Left);
+                screen.cpu.mmu.joypad.key_up(kirboy::joypad::Input::Left);
                 return;
             }
             if input.key_pressed(VirtualKeyCode::S) {
-                screen.cpu.mmu.joypad.key_down(emulator::joypad::Input::Down);
+                screen.cpu.mmu.joypad.key_down(kirboy::joypad::Input::Down);
                 return;
             }
             if input.key_released(VirtualKeyCode::S) {
-                screen.cpu.mmu.joypad.key_up(emulator::joypad::Input::Down);
+                screen.cpu.mmu.joypad.key_up(kirboy::joypad::Input::Down);
                 return;
             }
             if input.key_pressed(VirtualKeyCode::D) {
-                screen.cpu.mmu.joypad.key_down(emulator::joypad::Input::Right);
+                screen.cpu.mmu.joypad.key_down(kirboy::joypad::Input::Right);
                 return;
             }
             if input.key_released(VirtualKeyCode::D) {
-                screen.cpu.mmu.joypad.key_up(emulator::joypad::Input::Right);
+                screen.cpu.mmu.joypad.key_up(kirboy::joypad::Input::Right);
                 return;
             }
             if input.key_pressed(VirtualKeyCode::Comma) {
-                screen.cpu.mmu.joypad.key_down(emulator::joypad::Input::B);
+                screen.cpu.mmu.joypad.key_down(kirboy::joypad::Input::B);
                 return;
             }
             if input.key_released(VirtualKeyCode::Comma) {
-                screen.cpu.mmu.joypad.key_up(emulator::joypad::Input::B);
+                screen.cpu.mmu.joypad.key_up(kirboy::joypad::Input::B);
                 return;
             }
             if input.key_pressed(VirtualKeyCode::Period) {
-                screen.cpu.mmu.joypad.key_down(emulator::joypad::Input::A);
+                screen.cpu.mmu.joypad.key_down(kirboy::joypad::Input::A);
                 return;
             }
             if input.key_released(VirtualKeyCode::Period) {
-                screen.cpu.mmu.joypad.key_up(emulator::joypad::Input::A);
+                screen.cpu.mmu.joypad.key_up(kirboy::joypad::Input::A);
                 return;
             }
             if input.key_pressed(VirtualKeyCode::RShift) {
-                screen.cpu.mmu.joypad.key_down(emulator::joypad::Input::Select);
+                screen.cpu.mmu.joypad.key_down(kirboy::joypad::Input::Select);
                 return;
             }
             if input.key_released(VirtualKeyCode::RShift) {
-                screen.cpu.mmu.joypad.key_up(emulator::joypad::Input::Select);
+                screen.cpu.mmu.joypad.key_up(kirboy::joypad::Input::Select);
                 return;
             }
             if input.key_pressed(VirtualKeyCode::Return) {
-                screen.cpu.mmu.joypad.key_down(emulator::joypad::Input::Start);
+                screen.cpu.mmu.joypad.key_down(kirboy::joypad::Input::Start);
                 return;
             }
             if input.key_released(VirtualKeyCode::Return) {
-                screen.cpu.mmu.joypad.key_up(emulator::joypad::Input::Start);
+                screen.cpu.mmu.joypad.key_up(kirboy::joypad::Input::Start);
                 return;
             }
 
@@ -169,8 +222,8 @@ fn log_error<E: std::error::Error + 'static>(method_name: &str, err: E) {
 
 impl Screen {
     /// Create a new `World` instance that can draw a moving box.
-    fn new() -> Self {
-        let rom: Vec<u8> = std::fs::read(ROM).unwrap();
+    fn new(file: PathBuf) -> Self {
+        let rom: Vec<u8> = std::fs::read(file).unwrap();
 
         //Cartridge::new(ROM);
 
