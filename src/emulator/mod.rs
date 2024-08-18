@@ -28,6 +28,7 @@ impl Emulator {
 
         // load cartridge
         match std::fs::File::open(&ram_path) {
+            // only if cart has ram file
             Ok(mut file) => {
                 let mut data = vec![];
                 match file.read_to_end(&mut data) {
@@ -87,6 +88,7 @@ impl Emulator {
     }
 }
 
+// dumps save when exit.
 impl Drop for Emulator {
     fn drop(&mut self) {
         let data = self.cpu.mmu.cartridge.save_ram();
