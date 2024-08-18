@@ -1,4 +1,4 @@
-use crate::emulator::{ gpu::GPU, joypad::Joypad, mbc::{ new, MBC }, timer::Timer };
+use crate::emulator::{ gpu::GPU, joypad::Joypad, mbc::MBC, timer::Timer };
 
 pub struct MMU {
     //gpu: GPU,
@@ -17,7 +17,7 @@ pub struct MMU {
 }
 
 impl MMU {
-    pub fn new(data: Vec<u8>) -> Self {
+    pub fn new(cartridge: Box<dyn MBC>) -> Self {
         Self {
             xram: [0; 0x2000],
             gpu: GPU::new(),
@@ -28,12 +28,12 @@ impl MMU {
             intf: 0,
             hram: [0; 0x007f],
             ram: [0; 0x10000],
-            cartridge: new(data),
+            cartridge,
         }
     }
 
-    pub fn init(data: Vec<u8>) -> Self {
-        let mut mmu = MMU::new(data);
+    pub fn init(cartridge: Box<dyn MBC>) -> Self {
+        let mut mmu = MMU::new(cartridge);
         mmu.write_byte(0x80, 0xff10);
         mmu.write_byte(0xbf, 0xff11);
         mmu.write_byte(0xf3, 0xff12);

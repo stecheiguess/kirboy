@@ -42,10 +42,6 @@ use winit::platform::macos::{ EventLoopBuilderExtMacOS, WindowExtMacOS };
 
 const WIDTH: u32 = 160;
 const HEIGHT: u32 = 144;
-const BOX_SIZE: i16 = 64;
-
-const AFTER_BOOT: bool = true;
-const ROM: &str = "drmario.gb";
 
 fn main() -> Result<(), Error> {
     env_logger::init();
@@ -89,6 +85,7 @@ fn main() -> Result<(), Error> {
 
             if let Err(err) = pixels.render() {
                 log_error("pixels.render", err);
+
                 *control_flow = ControlFlow::Exit;
                 return;
             }
@@ -176,6 +173,7 @@ fn main() -> Result<(), Error> {
             if let Some(size) = input.window_resized() {
                 if let Err(err) = pixels.resize_surface(size.width, size.height) {
                     log_error("pixels.resize_surface", err);
+
                     *control_flow = ControlFlow::Exit;
                     return;
                 }

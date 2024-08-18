@@ -1,4 +1,4 @@
-use crate::emulator::{ mmu::MMU, registers::Registers };
+use crate::emulator::{ mmu::MMU, registers::Registers, mbc::MBC };
 
 // cpu
 pub struct CPU {
@@ -11,7 +11,7 @@ pub struct CPU {
 }
 
 impl CPU {
-    pub fn new(cartridge: Vec<u8>) -> Self {
+    pub fn new(cartridge: Box<dyn MBC>) -> Self {
         Self {
             registers: Registers::new(),
             mmu: MMU::new(cartridge),
@@ -22,7 +22,7 @@ impl CPU {
         }
     }
 
-    pub fn new_wb(cartridge: Vec<u8>) -> Self {
+    pub fn new_wb(cartridge: Box<dyn MBC>) -> Self {
         Self {
             registers: Registers::init(),
             mmu: MMU::init(cartridge),

@@ -17,6 +17,7 @@ impl MBC1 {
         let rom_banks = rom_banks(data[0x148]);
         let ram_banks = ram_banks(data[0x149]);
 
+        println!("{}", ram_banks);
         let battery = match data[0x147] {
             0x03 => true,
             _ => false,
@@ -24,7 +25,7 @@ impl MBC1 {
 
         Self {
             rom: data,
-            ram: Vec::with_capacity(ram_banks * 0x2000),
+            ram: vec![0; ram_banks* 0x2000],
             ram_on: false,
             rom_bank: 1,
             ram_bank: 0,
@@ -57,7 +58,7 @@ impl MBC1 {
 impl MBC for MBC1 {
     fn read_ram(&self, address: u16) -> u8 {
         if !self.ram_on {
-            0xff;
+            return 0xff;
         }
 
         let ram_address = if self.mode {
@@ -66,6 +67,7 @@ impl MBC for MBC1 {
             (address & 0x1fff) as usize
         };
 
+        println!("{}", ram_address);
         self.ram[ram_address]
     }
     fn read_rom(&self, address: u16) -> u8 {

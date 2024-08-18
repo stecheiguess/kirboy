@@ -252,9 +252,6 @@ impl GPU {
     }
 
     fn draw_bg_line(&mut self) {
-        //println!("line rendering");
-        // drawing scan lines of background
-        //println!("{:?}", self.control.enable_bg_window);
         if !self.control.enable_bg_window {
             return;
         }
@@ -287,10 +284,6 @@ impl GPU {
 
             let pixel_id = (self.bgp >> (pixel_color * 2)) & 0x03;
 
-            //if pixel_id > 0 {
-            // panic!("DF");
-            //}
-
             self.buffer[(self.ly as usize) * SCREEN_WIDTH + pixel_index] = pixel_id;
         }
     }
@@ -306,8 +299,8 @@ impl GPU {
             let y_in_tile = y % 8;
             let win_addr = if self.control.tile_map_window { 0x9c00 } else { 0x9800 };
 
-            for pixel_index in (self.winx as usize) + 7..SCREEN_WIDTH {
-                let x = pixel_index as u8;
+            for pixel_index in 0..SCREEN_WIDTH {
+                let x = ((pixel_index as i32) - ((self.winx as i32) - 7)) as u8;
                 let tile_map_col = x / 8;
                 let x_in_tile = x % 8;
 
@@ -379,11 +372,12 @@ impl GPU {
             let x_flip = ((sprite_attr >> 5) & 0x1) == 1;
             let y_flip = ((sprite_attr >> 6) & 0x1) == 1;
 
-            if self.ly >= (y as u8) && (self.ly as i32) < y + sprite_size {
+            let line = self.ly as i32;
+            if line >= y && line < y + sprite_size {
                 let y_in_sprite = if y_flip {
-                    (sprite_size as u8) - (self.ly - (y as u8)) - 1
+                    (sprite_size as u8) - ((line - y) as u8) - 1
                 } else {
-                    self.ly - (y as u8)
+                    (line - y) as u8
                 };
 
                 let tile_index = if sprite_size == 16 {
