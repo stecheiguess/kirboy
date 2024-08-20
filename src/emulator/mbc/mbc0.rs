@@ -1,4 +1,4 @@
-use super::MBC;
+use crate::emulator::mbc::MBC;
 
 pub struct MBC0 {
     rom: Vec<u8>,
@@ -26,7 +26,9 @@ impl MBC for MBC0 {
         return;
     }
 
-    fn load_ram(&mut self, data: Vec<u8>) {}
+    fn load_ram(&mut self, _data: Vec<u8>) {
+        return;
+    }
 
     fn save_ram(&self) -> Option<Vec<u8>> {
         None

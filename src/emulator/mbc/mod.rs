@@ -1,5 +1,6 @@
 mod mbc0;
 mod mbc1;
+mod mbc5;
 
 const TITLE_LENGTH: usize = 11;
 
@@ -37,6 +38,7 @@ pub fn new(data: Vec<u8>) -> Box<dyn MBC> {
     match mbc_type {
         0x00 => Box::new(mbc0::MBC0::new(data)),
         0x01..=0x03 => Box::new(mbc1::MBC1::new(data)),
+        0x19..=0x1e => Box::new(mbc5::MBC5::new(data)),
         _ => { panic!("MBC 0x{:02X} not implemented", mbc_type) }
     }
 }

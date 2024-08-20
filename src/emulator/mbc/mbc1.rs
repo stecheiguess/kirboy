@@ -1,4 +1,4 @@
-use super::{ ram_banks, rom_banks, MBC };
+use crate::emulator::mbc::{ ram_banks, rom_banks, MBC };
 
 pub struct MBC1 {
     rom: Vec<u8>,

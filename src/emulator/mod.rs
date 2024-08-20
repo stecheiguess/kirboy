@@ -1,7 +1,9 @@
 use std::{ fs::{ self, File }, io::Read, path::PathBuf };
+//use winit::{ keyboard::{ Key, NamedKey } };
 
 use cpu::CPU;
 use joypad::Input;
+use winit::event::VirtualKeyCode;
 
 pub mod gpu;
 pub mod joypad;
@@ -79,12 +81,16 @@ impl Emulator {
         }
     }
 
-    pub fn key_up(&mut self, key: Input) {
-        self.cpu.mmu.joypad.key_up(key)
+    pub fn key_up(&mut self, key: Option<Input>) {
+        if key.is_some() {
+            self.cpu.mmu.joypad.key_up(key.unwrap())
+        }
     }
 
-    pub fn key_down(&mut self, key: Input) {
-        self.cpu.mmu.joypad.key_down(key)
+    pub fn key_down(&mut self, key: Option<Input>) {
+        if key.is_some() {
+            self.cpu.mmu.joypad.key_down(key.unwrap())
+        }
     }
 }
 
@@ -92,10 +98,39 @@ impl Emulator {
 impl Drop for Emulator {
     fn drop(&mut self) {
         let data = self.cpu.mmu.cartridge.save_ram();
-        println!("Saved");
+
         if data.is_some() {
             // blah file save
             let _ = fs::write(&self.save, data.unwrap());
         }
+        println!("Saved");
     }
 }
+
+pub fn to_joypad(key: VirtualKeyCode) -> Option<Input> {
+    match key {
+        VirtualKeyCode::W => Some(Input::Up),
+        VirtualKeyCode::A => Some(Input::Left),
+        VirtualKeyCode::S => Some(Input::Down),
+        VirtualKeyCode::D => Some(Input::Right),
+        VirtualKeyCode::Comma => Some(Input::B),
+        VirtualKeyCode::Period => Some(Input::A),
+        VirtualKeyCode::RShift => Some(Input::Select),
+        VirtualKeyCode::Return => Some(Input::Start),
+        _ => None,
+    }
+}
+
+/*pub fn to_joypad_demo(key: Key) -> Option<Input> {
+    match key.as_ref() {
+        Key::Character("w") => Some(Input::Up),
+        Key::Character("a") => Some(Input::Left),
+        Key::Character("s") => Some(Input::Down),
+        Key::Character("d") => Some(Input::Right),
+        Key::Character(",") => Some(Input::B),
+        Key::Character(".") => Some(Input::A),
+        Key::Named(NamedKey::Shift) => Some(Input::Select),
+        Key::Named(NamedKey::Enter) => Some(Input::Start),
+        _ => None,
+    }
+}*/
