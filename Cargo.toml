@@ -17,11 +17,24 @@ log = "0.4"
 muda = "0.14.0"
 pixels = "0.13.0"
 rfd = "0.14.1"
-winit = "0.28"
-winit_input_helper = "0.14"
+tao = {version = "0.29", features = ["rwh_05"]}
 
 
 [package.metadata.bundle]
+name = "kirboy"
+identifier = "net.steche.kirboy"
+version = "0.1.0"
+copyright = "Copyright (c) Steche 2024. All rights reserved."
+short_description = "A GameBoy (DMG-01) Emulator."
+long_description = """
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do
+eiusmod tempor incididunt ut labore et dolore magna aliqua.  Ut
+enim ad minim veniam, quis nostrud exercitation ullamco laboris
+nisi ut aliquip ex ea commodo consequat.
+"""
+
+
+[package.metadata.bundle.bin.tao]
 name = "kirboy"
 identifier = "net.steche.kirboy"
 version = "0.1.0"

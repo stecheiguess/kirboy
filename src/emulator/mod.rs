@@ -1,9 +1,8 @@
 use std::{ fs::{ self, File }, io::Read, path::PathBuf };
-//use winit::{ keyboard::{ Key, NamedKey } };
 
 use cpu::CPU;
 use joypad::Input;
-use winit::event::VirtualKeyCode;
+use tao::keyboard::Key;
 
 pub mod gpu;
 pub mod joypad;
@@ -107,16 +106,16 @@ impl Drop for Emulator {
     }
 }
 
-pub fn to_joypad(key: VirtualKeyCode) -> Option<Input> {
+pub fn to_joypad(key: Key) -> Option<Input> {
     match key {
-        VirtualKeyCode::W => Some(Input::Up),
-        VirtualKeyCode::A => Some(Input::Left),
-        VirtualKeyCode::S => Some(Input::Down),
-        VirtualKeyCode::D => Some(Input::Right),
-        VirtualKeyCode::Comma => Some(Input::B),
-        VirtualKeyCode::Period => Some(Input::A),
-        VirtualKeyCode::RShift => Some(Input::Select),
-        VirtualKeyCode::Return => Some(Input::Start),
+        Key::Character("w") => Some(Input::Up),
+        Key::Character("a") => Some(Input::Left),
+        Key::Character("s") => Some(Input::Down),
+        Key::Character("d") => Some(Input::Right),
+        Key::Character(",") => Some(Input::B),
+        Key::Character(".") => Some(Input::A),
+        Key::Shift => Some(Input::Select),
+        Key::Enter => Some(Input::Start),
         _ => None,
     }
 }

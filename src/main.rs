@@ -8,10 +8,11 @@ use emulator::{ to_joypad, Emulator };
 use error_iter::ErrorIter as _;
 use log::error;
 use pixels::{ Error, Pixels, SurfaceTexture };
-use winit::dpi::LogicalSize;
-use winit::event::{ ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent };
-use winit::event_loop::{ ControlFlow, EventLoop, EventLoopBuilder };
-use winit::window::{ self, WindowBuilder };
+use tao::dpi::LogicalSize;
+use tao::event::{ ElementState, Event, WindowEvent };
+use tao::event_loop::{ ControlFlow, EventLoop, EventLoopBuilder };
+use tao::keyboard::Key;
+use tao::window::{ self, WindowBuilder };
 use std::path::PathBuf;
 use std::time::{ Instant };
 
@@ -34,7 +35,11 @@ use muda::{
 mod emulator;
 
 #[cfg(target_os = "macos")]
-use winit::platform::macos::{ EventLoopBuilderExtMacOS, WindowBuilderExtMacOS };
+use tao::platform::macos::WindowBuilderExtMacOS;
+#[cfg(target_os = "linux")]
+use tao::platform::unix::WindowExtUnix;
+#[cfg(target_os = "windows")]
+use tao::platform::windows::{ EventLoopBuilderExtWindows, WindowExtWindows };
 
 const WIDTH: u32 = 160;
 const HEIGHT: u32 = 144;
@@ -43,7 +48,13 @@ fn main() -> Result<(), Error> {
     env_logger::init();
 
     // screen init.
-    let mut emulator = Emulator::new(file_dialog());
+    let file = file_dialog();
+
+    if file.is_none() {
+        panic!("No file selected");
+    }
+
+    let mut emulator = Emulator::new(file.unwrap());
 
     // event loop for window.
     let event_loop = {
@@ -83,73 +94,25 @@ fn main() -> Result<(), Error> {
         Pixels::new(WIDTH, HEIGHT, surface_texture)?
     };
 
-    // menu(&window);
+    let menu_bar = Menu::new();
 
-    let mut now = Instant::now();
-
-    event_loop.run(move |event, _, control_flow| {
-        //wait redraw
-        if now.elapsed().as_millis() >= (16.75 as u128) {
-            window.request_redraw();
-            now = Instant::now();
-        }
-
-        match event {
-            Event::RedrawRequested(_) => {
-                emulator.draw(pixels.frame_mut());
-
-                if let Err(err) = pixels.render() {
-                    log_error("pixels.render", err);
-
-                    control_flow.set_exit();
-                    return;
-                }
+    #[cfg(target_os = "windows")]
+    {
+        let menu_bar = menu_bar.clone();
+        event_loop_builder.with_msg_hook(move |msg| {
+            use windows_sys::Win32::UI::WindowsAndMessaging::{ TranslateAcceleratorW, MSG };
+            unsafe {
+                let msg = msg as *const MSG;
+                let translated = TranslateAcceleratorW((*msg).hwnd, menu_bar.haccel() as _, msg);
+                translated == 1
             }
-            Event::WindowEvent { event, .. } =>
-                match event {
-                    WindowEvent::KeyboardInput { input, .. } =>
-                        match (input.state, input.virtual_keycode) {
-                            (ElementState::Pressed, Some(VirtualKeyCode::Escape)) => {
-                                control_flow.set_exit();
-                            }
-                            (ElementState::Pressed, Some(key)) => {
-                                emulator.key_down(to_joypad(key));
-                            }
-                            (ElementState::Released, Some(key)) => {
-                                emulator.key_up(to_joypad(key));
-                            }
-                            _ => (),
-                        }
-                    WindowEvent::CloseRequested => { control_flow.set_exit() }
-                    WindowEvent::Resized(size) => {
-                        if let Err(err) = pixels.resize_surface(size.width, size.height) {
-                            log_error("pixels.resize_surface", err);
-
-                            control_flow.set_exit();
-                            return;
-                        }
-                    }
-                    _ => (),
-                }
-            _ => (),
-        }
-    });
-}
-
-fn log_error<E: std::error::Error + 'static>(method_name: &str, err: E) {
-    error!("{method_name}() failed: {err}");
-    for source in err.sources().skip(1) {
-        error!("  Caused by: {source}");
+        });
     }
-}
 
-fn menu(window: &window::Window) {
-    // menu init.
-    let menu = Menu::new();
     #[cfg(target_os = "macos")]
     {
         let app_m = Submenu::new("App", true);
-        menu.append(&app_m);
+        menu_bar.append(&app_m);
         app_m.append_items(
             &[
                 &PredefinedMenuItem::about(None, None),
@@ -166,32 +129,134 @@ fn menu(window: &window::Window) {
     }
 
     let file_m = Submenu::new("&File", true);
-    let edit_m = Submenu::new("&Edit", true);
+    let window_m = Submenu::new("&Window", true);
 
-    menu.append_items(&[&file_m, &edit_m]);
+    menu_bar.append_items(&[&file_m, &window_m]);
 
-    let check_custom_i_1 = CheckMenuItem::new("Check Custom 1", true, true, None);
-    let check_custom_i_2 = CheckMenuItem::new("Check Custom 2", false, true, None);
+    let open = MenuItem::with_id(
+        "open",
+        "Open",
+        true,
+        Some(Accelerator::new(Some(Modifiers::SUPER), Code::KeyO))
+    );
 
-    file_m.append_items(&[&check_custom_i_1, &PredefinedMenuItem::separator(), &check_custom_i_2]);
+    file_m.append_items(
+        &[
+            //&custom_i_1,
+            &window_m,
+            &PredefinedMenuItem::separator(),
+            //&check_custom_i_1,
+            //&check_custom_i_2,
+            &open,
+        ]
+    );
+
+    window_m.append_items(
+        &[
+            &PredefinedMenuItem::minimize(None),
+            &PredefinedMenuItem::maximize(None),
+            &PredefinedMenuItem::close_window(Some("Close")),
+            &PredefinedMenuItem::fullscreen(None),
+            &PredefinedMenuItem::bring_all_to_front(None),
+            //&check_custom_i_3,
+            //&custom_i_1,
+        ]
+    );
 
     #[cfg(target_os = "windows")]
-    menu.init_for_hwnd(window.hwnd() as isize);
+    {
+        menu_bar.init_for_hwnd(window.hwnd() as _);
+    }
     #[cfg(target_os = "linux")]
-    menu.init_for_gtk_window(&gtk_window, Some(&vertical_gtk_box));
+    {
+        menu_bar.init_for_gtk_window(window.gtk_window(), window.default_vbox());
+    }
     #[cfg(target_os = "macos")]
     {
-        menu.init_for_nsapp();
+        menu_bar.init_for_nsapp();
+        window_m.set_as_windows_menu_for_nsapp();
+    }
+    let mut now = Instant::now();
+
+    let menu_channel = MenuEvent::receiver();
+
+    event_loop.run(move |event, _, control_flow| {
+        if now.elapsed().as_millis() >= (16.75 as u128) {
+            window.request_redraw();
+            now = Instant::now();
+        }
+
+        match event {
+            Event::RedrawRequested(_) => {
+                emulator.draw(pixels.frame_mut());
+
+                if let Err(err) = pixels.render() {
+                    log_error("pixels.render", err);
+
+                    *control_flow = ControlFlow::Exit;
+
+                    return;
+                }
+            }
+
+            Event::WindowEvent { event, .. } =>
+                match event {
+                    WindowEvent::KeyboardInput { event: input, .. } =>
+                        match (input.state, input.logical_key) {
+                            (ElementState::Pressed, Key::Escape) => {
+                                *control_flow = ControlFlow::Exit;
+                            }
+                            (ElementState::Pressed, key) => {
+                                emulator.key_down(to_joypad(key));
+                            }
+                            (ElementState::Released, key) => {
+                                emulator.key_up(to_joypad(key));
+                            }
+                            _ => (),
+                        }
+                    WindowEvent::CloseRequested => {
+                        *control_flow = ControlFlow::Exit;
+                    }
+                    WindowEvent::Resized(size) => {
+                        if let Err(err) = pixels.resize_surface(size.width, size.height) {
+                            log_error("pixels.resize_surface", err);
+
+                            *control_flow = ControlFlow::Exit;
+                            return;
+                        }
+                    }
+                    WindowEvent::DroppedFile(path) => {
+                        emulator = Emulator::new(path);
+                        window.set_title(&emulator.title());
+                    }
+                    _ => (),
+                }
+
+            _ => (),
+        }
+
+        if let Ok(event) = menu_channel.try_recv() {
+            if event.id == open.id() {
+                let file = file_dialog();
+                if file.is_some() {
+                    emulator = Emulator::new(file.unwrap());
+                    window.set_title(&emulator.title());
+                }
+            }
+            println!("{event:?}");
+        }
+    });
+}
+
+fn log_error<E: std::error::Error + 'static>(method_name: &str, err: E) {
+    error!("{method_name}() failed: {err}");
+    for source in err.sources().skip(1) {
+        error!("  Caused by: {source}");
     }
 }
 
-fn file_dialog() -> PathBuf {
-    let file = FileDialog::new()
-        .add_filter("gameboy rom", &["gb"])
-        .set_directory("/")
-        .pick_file()
-        .unwrap();
-
+fn file_dialog() -> Option<PathBuf> {
+    let file = FileDialog::new().add_filter("gameboy rom", &["gb"]).set_directory("/").pick_file();
     println!("{:?}", file);
     file
 }
