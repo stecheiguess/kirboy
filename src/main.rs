@@ -1,5 +1,5 @@
 #![deny(clippy::all)]
-#![forbid(unsafe_code)]
+//#![forbid(unsafe_code)]
 
 use emulator::{ to_joypad, Emulator };
 //use kirboy::cartridge::Cartridge;
@@ -47,6 +47,23 @@ const HEIGHT: u32 = 144;
 fn main() -> Result<(), Error> {
     env_logger::init();
 
+    let mut event_loop_builder = EventLoopBuilder::new();
+
+    let menu_bar = Menu::new();
+
+    #[cfg(target_os = "windows")]
+    {
+        let menu_bar = menu_bar.clone();
+        event_loop_builder.with_msg_hook(move |msg| {
+            use windows_sys::Win32::UI::WindowsAndMessaging::{ TranslateAcceleratorW, MSG };
+            unsafe {
+                let msg = msg as *const MSG;
+                let translated = TranslateAcceleratorW((*msg).hwnd, menu_bar.haccel() as _, msg);
+                translated == 1
+            }
+        });
+    }
+
     // screen init.
     let file = file_dialog();
 
@@ -55,11 +72,11 @@ fn main() -> Result<(), Error> {
     }
 
     let mut emulator = Emulator::new(file.unwrap());
+    
 
     // event loop for window.
     let event_loop = {
-        EventLoopBuilder::new()
-            //.with_default_menu(false)
+event_loop_builder
             .build()
     };
 
@@ -94,20 +111,7 @@ fn main() -> Result<(), Error> {
         Pixels::new(WIDTH, HEIGHT, surface_texture)?
     };
 
-    let menu_bar = Menu::new();
 
-    #[cfg(target_os = "windows")]
-    {
-        let menu_bar = menu_bar.clone();
-        event_loop_builder.with_msg_hook(move |msg| {
-            use windows_sys::Win32::UI::WindowsAndMessaging::{ TranslateAcceleratorW, MSG };
-            unsafe {
-                let msg = msg as *const MSG;
-                let translated = TranslateAcceleratorW((*msg).hwnd, menu_bar.haccel() as _, msg);
-                translated == 1
-            }
-        });
-    }
 
     #[cfg(target_os = "macos")]
     {
