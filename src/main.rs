@@ -9,10 +9,10 @@ use error_iter::ErrorIter as _;
 use log::error;
 use pixels::{ Error, Pixels, SurfaceTexture };
 use tao::dpi::LogicalSize;
-use tao::event::{ ElementState, Event, WindowEvent };
+use tao::event::{ ElementState, Event, MouseButton, WindowEvent };
 use tao::event_loop::{ ControlFlow, EventLoop, EventLoopBuilder };
 use tao::keyboard::Key;
-use tao::window::{ self, WindowBuilder };
+use tao::window::{ self, Window, WindowBuilder };
 use std::path::PathBuf;
 use std::time::{ Instant };
 
@@ -39,7 +39,7 @@ use tao::platform::macos::WindowBuilderExtMacOS;
 #[cfg(target_os = "linux")]
 use tao::platform::unix::WindowExtUnix;
 #[cfg(target_os = "windows")]
-use tao::platform::windows::{ EventLoopBuilderExtWindows, WindowExtWindows };
+use tao::platform::windows::{ WindowBuilderExtWindows, EventLoopBuilderExtWindows, WindowExtWindows };
 
 const WIDTH: u32 = 160;
 const HEIGHT: u32 = 144;
@@ -86,7 +86,7 @@ event_loop_builder
         #[cfg(target_os = "macos")]
         {
             WindowBuilder::new()
-                .with_title(emulator.title())
+                .with_title(&emulator.title())
                 .with_inner_size(size)
                 .with_min_inner_size(size)
                 .with_titlebar_transparent(true)
@@ -97,9 +97,11 @@ event_loop_builder
         #[cfg(target_os = "windows")]
         {
             WindowBuilder::new()
-                .with_title(emulator.title())
+                .with_title(&emulator.title())
                 .with_inner_size(size)
                 .with_min_inner_size(size)
+                //.with_transparent(true)
+               
                 .build(&event_loop)
                 .unwrap()
         }
@@ -135,20 +137,30 @@ event_loop_builder
     let file_m = Submenu::new("&File", true);
     let window_m = Submenu::new("&Window", true);
 
-    menu_bar.append_items(&[&file_m, &window_m]);
+    menu_bar.append_items(&[&file_m, 
+        //&window_m
+        ]);
+
+
 
     let open = MenuItem::with_id(
         "open",
         "Open",
         true,
-        Some(Accelerator::new(Some(Modifiers::SUPER), Code::KeyO))
+        Some(
+            if cfg!(macos) 
+            {Accelerator::new(Some(Modifiers::SUPER), Code::KeyO)}
+             else 
+            {Accelerator::new(Some(Modifiers::CONTROL), Code::KeyO)}
+        )
     );
+
 
     file_m.append_items(
         &[
             //&custom_i_1,
-            &window_m,
-            &PredefinedMenuItem::separator(),
+            //&window_m,
+            //&PredefinedMenuItem::separator(),
             //&check_custom_i_1,
             //&check_custom_i_2,
             &open,
@@ -170,6 +182,8 @@ event_loop_builder
     #[cfg(target_os = "windows")]
     {
         menu_bar.init_for_hwnd(window.hwnd() as _);
+
+        //menu_bar.hide_for_hwnd(window.hwnd() as _);
     }
     #[cfg(target_os = "linux")]
     {
@@ -184,6 +198,7 @@ event_loop_builder
 
     let menu_channel = MenuEvent::receiver();
 
+
     event_loop.run(move |event, _, control_flow| {
         if now.elapsed().as_millis() >= (16.75 as u128) {
             window.request_redraw();
@@ -192,7 +207,7 @@ event_loop_builder
 
         match event {
             Event::RedrawRequested(_) => {
-                emulator.draw(pixels.frame_mut());
+                &emulator.draw(pixels.frame_mut());
 
                 if let Err(err) = pixels.render() {
                     log_error("pixels.render", err);
@@ -203,21 +218,30 @@ event_loop_builder
                 }
             }
 
-            Event::WindowEvent { event, .. } =>
+            Event::WindowEvent { event,  .. } =>
                 match event {
                     WindowEvent::KeyboardInput { event: input, .. } =>
                         match (input.state, input.logical_key) {
                             (ElementState::Pressed, Key::Escape) => {
                                 *control_flow = ControlFlow::Exit;
                             }
+                          
                             (ElementState::Pressed, key) => {
-                                emulator.key_down(to_joypad(key));
+                               & emulator.key_down(to_joypad(key));
                             }
                             (ElementState::Released, key) => {
-                                emulator.key_up(to_joypad(key));
+                               & emulator.key_up(to_joypad(key));
                             }
                             _ => (),
                         }
+                    
+                    WindowEvent::CursorMoved { position, .. } => {
+
+                    }
+                    WindowEvent::MouseInput { state: ElementState::Released, button: MouseButton::Right,.. } =>
+                    {
+                        //show_context_menu(&window, &file_m, Some(window_cursor_position.into()))
+                    }
                     WindowEvent::CloseRequested => {
                         *control_flow = ControlFlow::Exit;
                     }
@@ -230,7 +254,7 @@ event_loop_builder
                         }
                     }
                     WindowEvent::DroppedFile(path) => {
-                        emulator = Emulator::new(path);
+                        let emulator = Emulator::new(path);
                         window.set_title(&emulator.title());
                     }
                     _ => (),
@@ -264,3 +288,5 @@ fn file_dialog() -> Option<PathBuf> {
     println!("{:?}", file);
     file
 }
+
+

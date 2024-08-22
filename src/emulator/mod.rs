@@ -19,18 +19,17 @@ pub struct Emulator {
 }
 
 impl Emulator {
-    pub fn new(rom_path: PathBuf) -> Self {
+    pub fn new(rom_path: PathBuf) -> Box<Emulator> {
         let ram_path = rom_path.with_extension("sav");
         let rom: Vec<u8> = std::fs::read(rom_path).unwrap();
 
         let mut cartridge = mbc::new(rom);
 
-        println!("{:?}", ram_path);
-
         // load cartridge
         match std::fs::File::open(&ram_path) {
             // only if cart has ram file
             Ok(mut file) => {
+                
                 let mut data = vec![];
                 match file.read_to_end(&mut data) {
                     Err(..) => panic!("Cannot Read Save File"),
@@ -42,13 +41,12 @@ impl Emulator {
             Err(..) => {}
         }
 
-        let cpu = CPU::new_wb(cartridge);
         let save = ram_path.clone();
 
-        Self {
-            cpu,
+        Box::new(Emulator {
+            cpu: CPU::new_wb(cartridge),
             save,
-        }
+        })
     }
 
     pub fn title(&self) -> String {
@@ -91,6 +89,7 @@ impl Emulator {
             self.cpu.mmu.joypad.key_down(key.unwrap())
         }
     }
+
 }
 
 // dumps save when exit.
@@ -119,6 +118,8 @@ pub fn to_joypad(key: Key) -> Option<Input> {
         _ => None,
     }
 }
+
+
 
 /*pub fn to_joypad_demo(key: Key) -> Option<Input> {
     match key.as_ref() {
