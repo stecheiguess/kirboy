@@ -12,6 +12,7 @@ pub struct Joypad {
     pub interrupt: bool,
 }
 
+#[derive(Copy, Clone)]
 pub enum Input {
     Left,
     Right,

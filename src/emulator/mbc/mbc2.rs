@@ -5,14 +5,12 @@ pub struct MBC2 {
     ram: Vec<u8>,
     ram_on: bool,
     rom_bank: usize,
-    rom_banks: usize,
+
     battery: bool,
 }
 
 impl MBC2 {
     pub fn new(data: Vec<u8>) -> Self {
-        let rom_banks = rom_banks(data[0x148]);
-
         let battery = match data[0x147] {
             0x06 => true,
             _ => false,
@@ -23,9 +21,6 @@ impl MBC2 {
             ram: vec![0; 512],
             ram_on: false,
             rom_bank: 1,
-
-            rom_banks,
-
             battery,
         }
     }

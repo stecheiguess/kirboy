@@ -11,25 +11,25 @@ pub struct CPU {
 }
 
 impl CPU {
-    pub fn new(cartridge: Box<dyn MBC>) -> Self {
-        Self {
-            registers: Registers::new(),
-            mmu: MMU::new(cartridge),
-            ime: false,
-            halted: false,
-            di: 0,
-            ei: 0,
-        }
-    }
-
-    pub fn new_wb(cartridge: Box<dyn MBC>) -> Self {
-        Self {
-            registers: Registers::init(),
-            mmu: MMU::init(cartridge),
-            ime: false,
-            halted: false,
-            di: 0,
-            ei: 0,
+    pub fn new(cartridge: Box<dyn MBC>, boot: bool) -> Self {
+        if boot {
+            Self {
+                registers: Registers::new(),
+                mmu: MMU::new(cartridge),
+                ime: false,
+                halted: false,
+                di: 0,
+                ei: 0,
+            }
+        } else {
+            Self {
+                registers: Registers::init(),
+                mmu: MMU::init(cartridge),
+                ime: false,
+                halted: false,
+                di: 0,
+                ei: 0,
+            }
         }
     }
 
