@@ -1,5 +1,3 @@
-
-
 const SCREEN_WIDTH: usize = 160;
 const SCREEN_HEIGHT: usize = 144;
 
@@ -89,6 +87,7 @@ pub struct GPU {
     int_2: bool,
     mode: Mode,
     clock: u16,
+
     pub buffer: [u8; SCREEN_HEIGHT * SCREEN_WIDTH],
 
     pub interrupt_stat: bool,

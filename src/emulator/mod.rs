@@ -19,12 +19,12 @@ pub mod mbc;
 pub struct Emulator {
     cpu: CPU,
     save: PathBuf,
-    keytable: HashMap<Key<'static>, Input>,
+    key_table: HashMap<Key<'static>, Input>,
     color: Color,
 }
 
 impl Emulator {
-    pub fn new(rom_path: PathBuf, conf: &Config) -> Box<Emulator> {
+    pub fn new(rom_path: &PathBuf, conf: &Config) -> Box<Emulator> {
         let ram_path = rom_path.with_extension("sav");
         let rom: Vec<u8> = std::fs::read(rom_path).unwrap();
 
@@ -50,7 +50,7 @@ impl Emulator {
         Box::new(Emulator {
             cpu: CPU::new(cartridge, false),
             save,
-            keytable: conf.get_table(),
+            key_table: conf.get_table(),
             color: conf.get_color(),
             //controls: conf.controls
         })
@@ -102,9 +102,9 @@ impl Emulator {
         }
     }
 
-    pub fn check_table(&self, key: &Key) -> Option<Input> {
-        println!("checking key table");
-        self.keytable.get(key).copied()
+    fn check_table(&self, key: &Key) -> Option<Input> {
+        //println!("checking key table");
+        self.key_table.get(key).copied()
     }
 
     // changes to green just because

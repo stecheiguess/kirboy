@@ -11,12 +11,11 @@ use log::error;
 use pixels::{ Error, Pixels, SurfaceTexture };
 use tao::dpi::LogicalSize;
 use tao::event::{ ElementState, Event, MouseButton, WindowEvent };
-use tao::event_loop::{ ControlFlow, EventLoop, EventLoopBuilder };
+use tao::event_loop::{ ControlFlow, EventLoopBuilder };
 use tao::keyboard::Key;
-use tao::window::{ self, Window, WindowBuilder };
-use std::path::PathBuf;
+use tao::window::{ Window, WindowBuilder };
+use std::path::{ Path, PathBuf };
 use std::time::{ Instant };
-use std::collections::HashMap;
 
 use rfd::FileDialog;
 
@@ -76,13 +75,13 @@ fn main() -> Result<(), Error> {
     let mut conf = Config::load(yaml);
 
     // screen init.
-    let file = file_dialog();
+    let file = file_dialog(None);
 
     if file.is_none() {
         panic!("No file selected");
     }
 
-    let mut emulator = Emulator::new(file.unwrap(), &conf);
+    let mut emulator = Emulator::new(&file.unwrap(), &conf);
 
     // event loop for window.
     let event_loop = { event_loop_builder.build() };
@@ -201,11 +200,10 @@ fn main() -> Result<(), Error> {
         menu_bar.init_for_nsapp();
         window_m.set_as_windows_menu_for_nsapp();
     }
-    let mut now = Instant::now();
 
     let menu_channel = MenuEvent::receiver();
 
-    //let table = conf.get_table().to_owned();
+    let mut now = Instant::now();
 
     event_loop.run(move |event, _, control_flow| {
         if now.elapsed().as_millis() >= (16.75 as u128) {
@@ -255,9 +253,11 @@ fn main() -> Result<(), Error> {
                     } => {
                         //show_context_menu(&window, &file_m, Some(window_cursor_position.into()));
                     }
+
                     WindowEvent::CloseRequested => {
                         *control_flow = ControlFlow::Exit;
                     }
+
                     WindowEvent::Resized(size) => {
                         if let Err(err) = pixels.resize_surface(size.width, size.height) {
                             log_error("pixels.resize_surface", err);
@@ -266,9 +266,8 @@ fn main() -> Result<(), Error> {
                             return;
                         }
                     }
-                    WindowEvent::DroppedFile(path) => {
-                        let emulator = Emulator::new(path, &conf);
-                        window.set_title(&emulator.title());
+                    WindowEvent::DroppedFile(file) => {
+                        new_emulator(&file, &window, &mut emulator, &conf);
                     }
                     _ => (),
                 }
@@ -278,10 +277,9 @@ fn main() -> Result<(), Error> {
 
         if let Ok(event) = menu_channel.try_recv() {
             if event.id == open.id() {
-                let file = file_dialog();
+                let file = file_dialog(None);
                 if file.is_some() {
-                    emulator = Emulator::new(file.unwrap(), &conf);
-                    window.set_title(&emulator.title());
+                    new_emulator(&file.unwrap(), &window, &mut emulator, &conf);
                 }
             }
             println!("{event:?}");
@@ -296,8 +294,19 @@ fn log_error<E: std::error::Error + 'static>(method_name: &str, err: E) {
     }
 }
 
-fn file_dialog() -> Option<PathBuf> {
-    let file = FileDialog::new().add_filter("gameboy rom", &["gb"]).set_directory("/").pick_file();
+fn file_dialog(path: Option<&Path>) -> Option<PathBuf> {
+    let file = FileDialog::new()
+        .add_filter("gameboy rom", &["gb"])
+        .set_directory(match path {
+            Some(folder) => folder,
+            None => Path::new("/"),
+        })
+        .pick_file();
     println!("{:?}", file);
     file
+}
+
+fn new_emulator(file: &PathBuf, window: &Window, emulator: &mut Box<Emulator>, conf: &Config) {
+    *emulator = Emulator::new(file, &conf);
+    window.set_title(&emulator.title());
 }
