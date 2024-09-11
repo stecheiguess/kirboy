@@ -29,7 +29,7 @@ impl Timer {
             0xff05 => self.tima,
             0xff06 => self.tma,
             0xff07 => { ((self.enabled as u8) << 2) | self.clock_select }
-            _ => { panic!("invalid") }
+            _ => { panic!("Invalid read for Timer") }
         }
     }
 
@@ -48,7 +48,7 @@ impl Timer {
                 self.enabled = (value >> 2) != 0;
                 self.clock_select = value & 0x03;
             }
-            _ => { panic!("invalid") }
+            _ => { panic!("Invalid write for Timer") }
         }
     }
 

@@ -120,7 +120,8 @@ impl MMU {
             0xffff => {
                 self.inte = value;
             }
-            other => {
+
+            _ => {
                 self.ram[address as usize] = value;
                 // println!("Address 0x{:02X} not yet implemented.", other);
             }

@@ -13,8 +13,8 @@ pub mod mmu;
 pub mod registers;
 pub mod timer;
 pub mod cpu;
-pub mod audio;
 pub mod mbc;
+pub mod apu;
 
 pub struct Emulator {
     cpu: CPU,

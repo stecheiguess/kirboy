@@ -7,7 +7,7 @@ const HBLANK_CYCLES: u16 = 204;
 const VBLANK_CYCLES: u16 = 456;
 
 #[derive(Copy, Clone, Debug)]
-struct ControlRegister {
+struct Control {
     enable_lcd: bool,
     tile_map_window: bool,
     enable_window: bool,
@@ -19,8 +19,8 @@ struct ControlRegister {
     enable_bg_window: bool,
 }
 
-impl std::convert::From<ControlRegister> for u8 {
-    fn from(reg: ControlRegister) -> u8 {
+impl std::convert::From<Control> for u8 {
+    fn from(reg: Control) -> u8 {
         ((reg.enable_lcd as u8) << 7) |
             ((reg.tile_map_window as u8) << 6) |
             ((reg.enable_window as u8) << 5) |
@@ -32,8 +32,8 @@ impl std::convert::From<ControlRegister> for u8 {
     }
 }
 
-impl std::convert::From<u8> for ControlRegister {
-    fn from(byte: u8) -> ControlRegister {
+impl std::convert::From<u8> for Control {
+    fn from(byte: u8) -> Control {
         let enable_lcd = ((byte >> 7) & 0b1) != 0;
         let tile_map_window = ((byte >> 6) & 0b1) != 0;
         let enable_window = ((byte >> 5) & 0b1) != 0;
@@ -43,7 +43,7 @@ impl std::convert::From<u8> for ControlRegister {
         let enable_obj = ((byte >> 1) & 0b1) != 0;
         let enable_bg_window = (byte & 0b1) != 0;
 
-        ControlRegister {
+        Control {
             enable_lcd,
             tile_map_window,
             enable_window,
@@ -65,7 +65,7 @@ enum Mode {
 }
 
 pub struct GPU {
-    control: ControlRegister,
+    control: Control,
     ly: u8,
     lyc: u8,
     scy: u8,
@@ -97,7 +97,7 @@ pub struct GPU {
 impl GPU {
     pub fn new() -> Self {
         Self {
-            control: ControlRegister {
+            control: Control {
                 enable_lcd: false,
                 tile_map_window: false,
                 enable_window: false,
@@ -168,7 +168,7 @@ impl GPU {
             0xfe00..=0xfe9f =>
                 self.oam[((address - 0xfe00) / 4) as usize][((address - 0xfe00) % 4) as usize],
 
-            _ => 0x0,
+            _ => panic!("Invalid read for GPU"),
         }
     }
 
@@ -176,7 +176,7 @@ impl GPU {
         match address {
             0xff40 => {
                 let prev_lcd_state = self.control.enable_lcd;
-                self.control = ControlRegister::from(value);
+                self.control = Control::from(value);
 
                 if prev_lcd_state && !self.control.enable_lcd {
                     self.clock = 0;
@@ -246,7 +246,7 @@ impl GPU {
                     value;
             }
 
-            _ => {}
+            _ => panic!("Invalid write for GPU"),
         }
     }
 
