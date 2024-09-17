@@ -1,20 +1,24 @@
-use std::{ fs::{ self, File }, io::Read, path::PathBuf };
 use std::collections::HashMap;
+use std::{
+    fs::{self, File},
+    io::Read,
+    path::PathBuf,
+};
 
 use cpu::CPU;
 use joypad::Input;
 use tao::keyboard::Key;
 
-use crate::config::{ Config, Color };
+use crate::config::{Color, Config};
 
+pub mod apu;
+pub mod cpu;
 pub mod gpu;
 pub mod joypad;
+pub mod mbc;
 pub mod mmu;
 pub mod registers;
 pub mod timer;
-pub mod cpu;
-pub mod mbc;
-pub mod apu;
 
 pub struct Emulator {
     cpu: CPU,
@@ -24,7 +28,7 @@ pub struct Emulator {
 }
 
 impl Emulator {
-    pub fn new(rom_path: &PathBuf, conf: &Config) -> Box<Emulator> {
+    pub fn new(rom_path: &PathBuf, conf: Config) -> Box<Emulator> {
         let ram_path = rom_path.with_extension("sav");
         let rom: Vec<u8> = std::fs::read(rom_path).unwrap();
 
@@ -60,21 +64,27 @@ impl Emulator {
         self.cpu.mmu.cartridge.title()
     }
     // runs as many cycle counts before updating screen.
-    fn update(&mut self) {
+    pub fn update(&mut self) {
         let mut cycle_count: u16 = 0;
         while cycle_count < 17556 {
             cycle_count = cycle_count.wrapping_add(self.cpu.step() as u16);
         }
+        //   self.cpu.step();
+    }
+
+    pub fn step(&mut self) -> u8 {
+        self.cpu.step()
     }
 
     // draws to pixel buffer.
-    pub fn draw(&mut self, frame: &mut [u8]) {
+    pub fn draw(&mut self) -> Vec<u8> {
         self.update();
         let screen = self.cpu.mmu.gpu.buffer;
 
-        for (i, pixel) in frame.chunks_exact_mut(4).enumerate() {
+        let mut frame = Vec::new();
+        for (&byte) in screen.iter() {
             let mut rgba: [u8; 4] = [0, 0, 0, 0xff];
-            match screen[i] {
+            match byte {
                 0 => rgba[..3].copy_from_slice(&self.color.id0), // white
                 1 => rgba[..3].copy_from_slice(&self.color.id1), // light gray
                 2 => rgba[..3].copy_from_slice(&self.color.id2), // dark gray
@@ -83,9 +93,10 @@ impl Emulator {
                 _ => (),
             }
 
-            pixel.copy_from_slice(&rgba);
+            frame.extend_from_slice(&rgba);
             //println!("{i:?}");
         }
+        frame
     }
 
     pub fn key_up(&mut self, key: &Key) {

@@ -92,6 +92,8 @@ pub struct GPU {
 
     pub interrupt_stat: bool,
     pub interrupt_vblank: bool,
+
+    pub v_blank: bool,
 }
 
 impl GPU {
@@ -135,6 +137,8 @@ impl GPU {
 
             interrupt_stat: false,
             interrupt_vblank: false,
+
+            v_blank: false,
         }
     }
 
@@ -462,6 +466,7 @@ impl GPU {
         match self.mode {
             // mode 2
             Mode::OAMScan => {
+                self.v_blank = false;
                 if self.clock >= OAM_CYCLES {
                     self.mode = Mode::Drawing;
                     self.clock %= OAM_CYCLES;
@@ -473,6 +478,7 @@ impl GPU {
             }
             // mode 3
             Mode::Drawing => {
+                self.v_blank = false;
                 if self.clock >= DRAW_CYCLES {
                     self.mode = Mode::HBlank;
                     self.clock %= DRAW_CYCLES;
@@ -481,6 +487,7 @@ impl GPU {
             }
             // mode 0
             Mode::HBlank => {
+                self.v_blank = false;
                 if self.clock >= HBLANK_CYCLES {
                     self.ly += 1;
                     self.clock %= HBLANK_CYCLES;
@@ -504,6 +511,7 @@ impl GPU {
 
             // mode 1
             Mode::VBlank => {
+                self.v_blank = true;
                 if self.clock >= VBLANK_CYCLES {
                     self.ly += 1;
                     self.clock %= VBLANK_CYCLES;

@@ -1,7 +1,12 @@
-use serde::{ Serialize, Deserialize };
+use dirs::config_local_dir;
+use serde::{Deserialize, Serialize};
 use serde_yml;
+use std::{
+    collections::HashMap,
+    fs::{self, File},
+    path::{Path, PathBuf},
+};
 use tao::keyboard::Key;
-use std::{ collections::HashMap, hash::Hash };
 
 use crate::emulator::joypad::Input;
 
@@ -33,8 +38,8 @@ pub struct Keybinds {
 }
 
 impl Config {
-    pub fn new() -> Box<Config> {
-        Box::new(Config {
+    pub fn new() -> Config {
+        Config {
             color: Color {
                 id0: [0xff, 0xff, 0xff], // white
                 id1: [0xcc, 0xcc, 0xcc], // light gray
@@ -52,7 +57,7 @@ impl Config {
                 Start: "enter".to_string(),
                 Select: "shift".to_string(),
             },
-        })
+        }
     }
 
     pub fn print(&self) -> String {
@@ -61,10 +66,29 @@ impl Config {
         yaml
     }
 
-    pub fn load(yaml: String) -> Box<Config> {
-        let config: Config = serde_yml::from_str(&yaml).unwrap();
-        println!("Config:\n{:?}", config);
-        Box::new(config)
+    pub fn load(path: &PathBuf) -> Config {
+        let file = fs::read_to_string(path);
+        match file {
+            Err(_) => {
+                println!("no file");
+                let new_config = Config::new();
+                let parent_dir = Path::new(path).parent().unwrap();
+                if !parent_dir.exists() {
+                    fs::create_dir_all(parent_dir).expect("Failed to create directory");
+                }
+                fs::write(
+                    &path,
+                    serde_yml::to_string(&new_config).expect("config to string"),
+                );
+                new_config
+            }
+
+            Ok(_) => {
+                let config = serde_yml::from_str(&file.unwrap()).expect("invalid config");
+                println!("Config:\n{:?}", config);
+                config
+            }
+        }
     }
 
     pub fn get_table(&self) -> HashMap<Key<'static>, Input> {
@@ -127,6 +151,10 @@ pub fn to_key(key: &String) -> Key<'static> {
         "7" => Key::Character("7".into()),
         "8" => Key::Character("8".into()),
         "9" => Key::Character("9".into()),
+        "." => Key::Character(".".into()),
+        "," => Key::Character(",".into()),
+        "[" => Key::Character("[".into()),
+        "]" => Key::Character("]".into()),
         _ => Key::Dead(None),
     }
 }

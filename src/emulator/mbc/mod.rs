@@ -6,7 +6,7 @@ mod mbc5;
 
 const TITLE_LENGTH: usize = 11;
 
-pub trait MBC {
+pub trait MBC: Send {
     fn read_rom(&self, address: u16) -> u8;
 
     fn write_rom(&mut self, value: u8, address: u16);
@@ -43,7 +43,9 @@ pub fn new(data: Vec<u8>) -> Box<dyn MBC> {
         0x05..=0x06 => Box::new(mbc2::MBC2::new(data)),
         //0x0f..=0x13 => Box::new(mbc3::MBC3::new(data)),
         0x19..=0x1e => Box::new(mbc5::MBC5::new(data)),
-        _ => { panic!("MBC 0x{:02X} not implemented", mbc_type) }
+        _ => {
+            panic!("MBC 0x{:02X} not implemented", mbc_type)
+        }
     }
 }
 

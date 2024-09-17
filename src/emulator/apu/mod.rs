@@ -1,5 +1,6 @@
-mod square;
 mod channel;
+mod noise;
+mod square;
 
 #[derive(Copy, Clone, Debug)]
 pub struct APU {
@@ -26,8 +27,8 @@ impl APU {
     pub fn read(&self, address: u16) -> u8 {
         match address {
             //0xff24 => { self.v }
-            0xff25 => { self.panning }
-            0xff26 => { (self.enable as u8) << 7 }
+            0xff25 => self.panning,
+            0xff26 => (self.enable as u8) << 7,
             _ => panic!("Invalid read for APU"),
         }
     }

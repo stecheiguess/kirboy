@@ -22,11 +22,21 @@ serde = { version = "1.0.208", features = ["derive"] }
 serde_yml = "0.0.11"
 tao = {version = "0.29", features = ["rwh_05"]}
 windows-sys = "0.59.0"
+dirs = "5.0"
+opener = "0.7.2"
+cpal = "0.15.3"
+fundsp = "0.19.1"
+anyhow = "1.0.88"
+parse = "0.1.2"
+clap = "4.5.17"
+blip_buf = "0.1.4"
+
 
 
 [package.metadata.bundle]
 name = "kirboy"
 identifier = "net.steche.kirboy"
+icon = ["icons/32.png", "icons/128.png", "icons/512.png","icons/rounded@2x.png"]
 version = "0.1.0"
 copyright = "Copyright (c) Steche 2024. All rights reserved."
 short_description = "A GameBoy (DMG-01) Emulator."

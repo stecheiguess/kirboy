@@ -1,6 +1,7 @@
-use crate::emulator::{ mmu::MMU, registers::Registers, mbc::MBC };
+use crate::emulator::{mbc::MBC, mmu::MMU, registers::Registers};
 
 // cpu
+
 pub struct CPU {
     pub registers: Registers,
     pub mmu: MMU,
@@ -94,7 +95,11 @@ impl CPU {
         self.update_interrupt();
 
         let m_cycles = if !self.handle_interrupt() {
-            if self.halted { 1 } else { self.execute() }
+            if self.halted {
+                1
+            } else {
+                self.execute()
+            }
         } else {
             4
         };
@@ -109,8 +114,8 @@ impl CPU {
         //println!("Instruction {:2X}", opcode);
         //println!("{:?}", self.registers);
         match opcode {
-            0x00 => { 1 }
-            0x10 => { 1 }
+            0x00 => 1,
+            0x10 => 1,
 
             // ld 16 bit
             0x01 => {
@@ -142,24 +147,27 @@ impl CPU {
             }
 
             // ld 16, a
-
             0x02 => {
-                self.mmu.write_byte(self.registers.a, self.registers.get_bc());
+                self.mmu
+                    .write_byte(self.registers.a, self.registers.get_bc());
                 2
             }
 
             0x12 => {
-                self.mmu.write_byte(self.registers.a, self.registers.get_de());
+                self.mmu
+                    .write_byte(self.registers.a, self.registers.get_de());
                 2
             }
 
             0x22 => {
-                self.mmu.write_byte(self.registers.a, self.registers.get_hli());
+                self.mmu
+                    .write_byte(self.registers.a, self.registers.get_hli());
                 2
             }
 
             0x32 => {
-                self.mmu.write_byte(self.registers.a, self.registers.get_hld());
+                self.mmu
+                    .write_byte(self.registers.a, self.registers.get_hld());
 
                 2
             }
@@ -194,15 +202,18 @@ impl CPU {
 
             // inc 16
             0x03 => {
-                self.registers.set_bc(self.registers.get_bc().wrapping_add(1));
+                self.registers
+                    .set_bc(self.registers.get_bc().wrapping_add(1));
                 2
             }
             0x13 => {
-                self.registers.set_de(self.registers.get_de().wrapping_add(1));
+                self.registers
+                    .set_de(self.registers.get_de().wrapping_add(1));
                 2
             }
             0x23 => {
-                self.registers.set_hl(self.registers.get_hl().wrapping_add(1));
+                self.registers
+                    .set_hl(self.registers.get_hl().wrapping_add(1));
                 2
             }
             0x33 => {
@@ -212,15 +223,18 @@ impl CPU {
 
             // dec 16
             0x0b => {
-                self.registers.set_bc(self.registers.get_bc().wrapping_sub(1));
+                self.registers
+                    .set_bc(self.registers.get_bc().wrapping_sub(1));
                 2
             }
             0x1b => {
-                self.registers.set_de(self.registers.get_de().wrapping_sub(1));
+                self.registers
+                    .set_de(self.registers.get_de().wrapping_sub(1));
                 2
             }
             0x2b => {
-                self.registers.set_hl(self.registers.get_hl().wrapping_sub(1));
+                self.registers
+                    .set_hl(self.registers.get_hl().wrapping_sub(1));
                 2
             }
             0x3b => {
@@ -540,36 +554,42 @@ impl CPU {
 
             // ld [hl]
             0x70 => {
-                self.mmu.write_byte(self.registers.b, self.registers.get_hl());
+                self.mmu
+                    .write_byte(self.registers.b, self.registers.get_hl());
                 2
             }
             0x71 => {
-                self.mmu.write_byte(self.registers.c, self.registers.get_hl());
+                self.mmu
+                    .write_byte(self.registers.c, self.registers.get_hl());
                 2
             }
             0x72 => {
-                self.mmu.write_byte(self.registers.d, self.registers.get_hl());
+                self.mmu
+                    .write_byte(self.registers.d, self.registers.get_hl());
                 2
             }
             0x73 => {
-                self.mmu.write_byte(self.registers.e, self.registers.get_hl());
+                self.mmu
+                    .write_byte(self.registers.e, self.registers.get_hl());
                 2
             }
             0x74 => {
-                self.mmu.write_byte(self.registers.h, self.registers.get_hl());
+                self.mmu
+                    .write_byte(self.registers.h, self.registers.get_hl());
                 2
             }
             0x75 => {
-                self.mmu.write_byte(self.registers.l, self.registers.get_hl());
+                self.mmu
+                    .write_byte(self.registers.l, self.registers.get_hl());
                 2
             }
             0x77 => {
-                self.mmu.write_byte(self.registers.a, self.registers.get_hl());
+                self.mmu
+                    .write_byte(self.registers.a, self.registers.get_hl());
                 2
             }
 
             // halted
-
             0x76 => {
                 self.halted = true;
                 1
@@ -896,7 +916,7 @@ impl CPU {
             }
 
             // CB
-            0xcb => { self.execute_cb() }
+            0xcb => self.execute_cb(),
 
             // a, n8
             0xc6 => {
@@ -1012,7 +1032,8 @@ impl CPU {
             // a, registers. [c]
             0xe0 => {
                 let byte = self.fetch();
-                self.mmu.write_byte(self.registers.a, 0xff00 | (byte as u16));
+                self.mmu
+                    .write_byte(self.registers.a, 0xff00 | (byte as u16));
                 3
             }
 
@@ -1023,7 +1044,8 @@ impl CPU {
             }
 
             0xe2 => {
-                self.mmu.write_byte(self.registers.a, 0xff00 | (self.registers.c as u16));
+                self.mmu
+                    .write_byte(self.registers.a, 0xff00 | (self.registers.c as u16));
                 2
             }
 
@@ -2453,7 +2475,7 @@ impl CPU {
                 2
             }
 
-            other => { 2 }
+            other => 2,
         }
     }
 
