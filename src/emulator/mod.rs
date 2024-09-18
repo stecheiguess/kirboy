@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use std::thread;
+use std::time::Duration;
 use std::{
     fs::{self, File},
     io::Read,
@@ -19,6 +21,10 @@ pub mod mbc;
 pub mod mmu;
 pub mod registers;
 pub mod timer;
+
+pub const CLOCK_FREQUENCY: u32 = 4_194_304;
+pub const STEP_TIME: u32 = 16;
+pub const STEP_CYCLES: u32 = (STEP_TIME as f64 / (1000_f64 / CLOCK_FREQUENCY as f64)) as u32;
 
 pub struct Emulator {
     cpu: CPU,
@@ -63,22 +69,20 @@ impl Emulator {
     pub fn title(&self) -> String {
         self.cpu.mmu.cartridge.title()
     }
-    // runs as many cycle counts before updating screen.
-    pub fn update(&mut self) {
-        let mut cycle_count: u16 = 0;
-        while cycle_count < 17556 {
-            cycle_count = cycle_count.wrapping_add(self.cpu.step() as u16);
-        }
-        //   self.cpu.step();
-    }
 
     pub fn step(&mut self) -> u8 {
+        //thread::sleep(Duration::from_nanos(200));
         self.cpu.step()
     }
 
+    pub fn updated(&mut self) -> bool {
+        let updated = self.cpu.mmu.gpu.v_blank;
+        self.cpu.mmu.gpu.v_blank = false;
+        updated
+    }
     // draws to pixel buffer.
     pub fn draw(&mut self) -> Vec<u8> {
-        self.update();
+        //self.update();
         let screen = self.cpu.mmu.gpu.buffer;
 
         let mut frame = Vec::new();
@@ -126,11 +130,8 @@ impl Emulator {
         self.color.id3 = [15, 56, 15];
         println!("to green")
     }
-}
 
-// dumps save when exit.
-impl Drop for Emulator {
-    fn drop(&mut self) {
+    pub fn save(&mut self) {
         let data = self.cpu.mmu.cartridge.save_ram();
 
         if data.is_some() {
@@ -138,5 +139,12 @@ impl Drop for Emulator {
             let _ = fs::write(&self.save, data.unwrap());
         }
         println!("Saved");
+    }
+}
+
+// dumps save when exit.
+impl Drop for Emulator {
+    fn drop(&mut self) {
+        self.save();
     }
 }

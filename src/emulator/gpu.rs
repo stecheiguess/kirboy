@@ -21,14 +21,14 @@ struct Control {
 
 impl std::convert::From<Control> for u8 {
     fn from(reg: Control) -> u8 {
-        ((reg.enable_lcd as u8) << 7) |
-            ((reg.tile_map_window as u8) << 6) |
-            ((reg.enable_window as u8) << 5) |
-            ((reg.tile_area as u8) << 4) |
-            ((reg.tile_map_bg as u8) << 3) |
-            ((reg.obj_size as u8) << 2) |
-            ((reg.enable_obj as u8) << 1) |
-            (reg.enable_bg_window as u8)
+        ((reg.enable_lcd as u8) << 7)
+            | ((reg.tile_map_window as u8) << 6)
+            | ((reg.enable_window as u8) << 5)
+            | ((reg.tile_area as u8) << 4)
+            | ((reg.tile_map_bg as u8) << 3)
+            | ((reg.obj_size as u8) << 2)
+            | ((reg.enable_obj as u8) << 1)
+            | (reg.enable_bg_window as u8)
     }
 }
 
@@ -146,12 +146,11 @@ impl GPU {
         match address {
             0xff40 => u8::from(self.control),
             0xff41 => {
-                0x80 |
-                    ((self.int_lyc as u8) << 6) |
-                    ((self.int_2 as u8) << 5) |
-                    ((self.int_1 as u8) << 4) |
-                    ((self.int_0 as u8) << 3) |
-                    (self.mode as u8)
+                0x80 | ((self.int_lyc as u8) << 6)
+                    | ((self.int_2 as u8) << 5)
+                    | ((self.int_1 as u8) << 4)
+                    | ((self.int_0 as u8) << 3)
+                    | (self.mode as u8)
             }
             0xff42 => self.scy,
             0xff43 => self.scx,
@@ -169,8 +168,9 @@ impl GPU {
             0x9800..=0x9bff => self.map0[(address - 0x9800) as usize],
             0x9c00..=0x9fff => self.map1[(address - 0x9c00) as usize],
 
-            0xfe00..=0xfe9f =>
-                self.oam[((address - 0xfe00) / 4) as usize][((address - 0xfe00) % 4) as usize],
+            0xfe00..=0xfe9f => {
+                self.oam[((address - 0xfe00) / 4) as usize][((address - 0xfe00) % 4) as usize]
+            }
 
             _ => panic!("Invalid read for GPU"),
         }
@@ -263,16 +263,19 @@ impl GPU {
         let tile_map_row = y / 8;
         let y_in_tile = y % 8;
 
-        let bg_addr = if self.control.tile_map_bg { 0x9c00 } else { 0x9800 };
+        let bg_addr = if self.control.tile_map_bg {
+            0x9c00
+        } else {
+            0x9800
+        };
 
         for pixel_index in 0..SCREEN_WIDTH {
             let x = self.scx.wrapping_add(pixel_index as u8);
             let tile_map_col = x / 8;
             let x_in_tile = x % 8;
 
-            let tile_index = self.read(
-                bg_addr + ((tile_map_row as u16) << 5) + (tile_map_col as u16)
-            );
+            let tile_index =
+                self.read(bg_addr + ((tile_map_row as u16) << 5) + (tile_map_col as u16));
             let tile_addr = if self.control.tile_area {
                 0x8000 + (tile_index as u16) * 16
             } else {
@@ -300,16 +303,19 @@ impl GPU {
             let y = self.ly - self.winy;
             let tile_map_row = y / 8;
             let y_in_tile = y % 8;
-            let win_addr = if self.control.tile_map_window { 0x9c00 } else { 0x9800 };
+            let win_addr = if self.control.tile_map_window {
+                0x9c00
+            } else {
+                0x9800
+            };
 
             for pixel_index in 0..SCREEN_WIDTH {
                 let x = ((pixel_index as i32) - ((self.winx as i32) - 7)) as u8;
                 let tile_map_col = x / 8;
                 let x_in_tile = x % 8;
 
-                let tile_index = self.read(
-                    win_addr + ((tile_map_row as u16) << 5) + (tile_map_col as u16)
-                );
+                let tile_index =
+                    self.read(win_addr + ((tile_map_row as u16) << 5) + (tile_map_col as u16));
                 let tile_addr = if self.control.tile_area {
                     0x8000 + (tile_index as u16) * 16
                 } else {
@@ -406,23 +412,22 @@ impl GPU {
 
                         let low =
                             (self.read(tile_addr + ((y_in_sprite * 2) as u16)) >> (7 - a)) & 0x1;
-                        let high =
-                            (self.read(tile_addr + ((y_in_sprite * 2 + 1) as u16)) >> (7 - a)) &
-                            0x1;
+                        let high = (self.read(tile_addr + ((y_in_sprite * 2 + 1) as u16))
+                            >> (7 - a))
+                            & 0x1;
 
                         let pixel_color = (high << 1) | low;
 
                         let pixel_id = match palette {
                             0 => (self.obp0 >> (pixel_color * 2)) & 0x03,
                             1 => (self.obp1 >> (pixel_color * 2)) & 0x03,
-                            _ => { 0 }
+                            _ => 0,
                         };
 
                         if pixel_color != 0 {
-                            self.buffer[
-                                ((self.ly as u16) * (SCREEN_WIDTH as u16) +
-                                    ((x + x_in_sprite) as u16)) as usize
-                            ] = pixel_id;
+                            self.buffer[((self.ly as u16) * (SCREEN_WIDTH as u16)
+                                + ((x + x_in_sprite) as u16))
+                                as usize] = pixel_id;
                         }
                     }
                 }
@@ -466,7 +471,6 @@ impl GPU {
         match self.mode {
             // mode 2
             Mode::OAMScan => {
-                self.v_blank = false;
                 if self.clock >= OAM_CYCLES {
                     self.mode = Mode::Drawing;
                     self.clock %= OAM_CYCLES;
@@ -478,7 +482,6 @@ impl GPU {
             }
             // mode 3
             Mode::Drawing => {
-                self.v_blank = false;
                 if self.clock >= DRAW_CYCLES {
                     self.mode = Mode::HBlank;
                     self.clock %= DRAW_CYCLES;
@@ -487,7 +490,6 @@ impl GPU {
             }
             // mode 0
             Mode::HBlank => {
-                self.v_blank = false;
                 if self.clock >= HBLANK_CYCLES {
                     self.ly += 1;
                     self.clock %= HBLANK_CYCLES;
@@ -499,6 +501,7 @@ impl GPU {
                     if self.ly > 143 {
                         self.mode = Mode::VBlank;
                         self.interrupt_vblank = true;
+                        self.v_blank = true;
                     } else {
                         self.mode = Mode::OAMScan;
                     }
@@ -511,7 +514,6 @@ impl GPU {
 
             // mode 1
             Mode::VBlank => {
-                self.v_blank = true;
                 if self.clock >= VBLANK_CYCLES {
                     self.ly += 1;
                     self.clock %= VBLANK_CYCLES;

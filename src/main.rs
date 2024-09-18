@@ -11,10 +11,10 @@ use error_iter::ErrorIter as _;
 use log::error;
 use pixels::{Error, Pixels, SurfaceTexture};
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::TryRecvError;
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::mpsc::{channel, Receiver, Sender, SyncSender, TrySendError};
+use std::sync::mpsc::{sync_channel, TryRecvError};
 use std::thread;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use tao::dpi::LogicalSize;
 use tao::event::{ElementState, Event, MouseButton, WindowEvent};
 use tao::event_loop::{ControlFlow, EventLoopBuilder};
@@ -48,6 +48,7 @@ const HEIGHT: u32 = 144;
 enum EmulatorEvent {
     KeyUp(Key<'static>),
     KeyDown(Key<'static>),
+    New(Box<Emulator>),
     Draw(Vec<u8>),
 }
 
@@ -82,14 +83,14 @@ fn main() -> Result<(), Error> {
         panic!("No file selected");
     }
 
-    let (frame_sender, frame_receiver): (Sender<EmulatorEvent>, Receiver<EmulatorEvent>) =
-        channel();
+    let (frame_sender, frame_receiver): (SyncSender<EmulatorEvent>, Receiver<EmulatorEvent>) =
+        sync_channel(1);
     let (input_sender, input_receiver): (Sender<EmulatorEvent>, Receiver<EmulatorEvent>) =
         channel();
 
     let mut emulator = Emulator::new(&file.unwrap(), Config::load(&config_path));
 
-    thread::spawn(move || run_emulator(emulator, frame_sender, input_receiver));
+    //thread::spawn(move || run_emulator(emulator, frame_sender, input_receiver));
 
     // event loop for window.
     let event_loop = { event_loop_builder.build() };
@@ -211,6 +212,8 @@ fn main() -> Result<(), Error> {
     let menu_channel = MenuEvent::receiver();
 
     //let mut now = Instant::now();
+    let ticks = (4194304f64 / 1000.0 * 16.0).round() as u32;
+    let mut clock = 0;
 
     event_loop.run(move |event, _event_loop, control_flow| {
         *control_flow = ControlFlow::Poll;
@@ -219,15 +222,23 @@ fn main() -> Result<(), Error> {
             window.request_redraw();
             now = Instant::now();
         }*/
+
+        //let interval = Duration::from_nanos(25000);
+        //let mut next_time = Instant::now() + interval;
+
         window.request_redraw();
 
         match event {
             Event::RedrawRequested(_) => {
-                match frame_receiver.recv() {
-                    Ok(EmulatorEvent::Draw(buffer)) => pixels.frame_mut().copy_from_slice(&buffer),
-                    _ => (),
+                while clock < ticks {
+                    clock += emulator.step() as u32 * 4;
+
+                    if emulator.updated() {
+                        pixels.frame_mut().copy_from_slice(&emulator.draw());
+                    }
                 }
 
+                clock -= ticks;
                 // pixels.frame_mut().copy_from_slice(&emulator.draw());
 
                 if let Err(err) = pixels.render() {
@@ -247,16 +258,16 @@ fn main() -> Result<(), Error> {
                         }
 
                         (ElementState::Pressed, Key::Character("g")) => {
-                            //&emulator.green();
+                            &emulator.green();
                         }
 
                         (ElementState::Pressed, key) => {
-                            input_sender.send(EmulatorEvent::KeyDown(key)).unwrap();
-                            //  & emulator.key_down(&key);
+                            // input_sender.send(EmulatorEvent::KeyDown(key)).unwrap();
+                            &emulator.key_down(&key);
                         }
                         (ElementState::Released, key) => {
-                            input_sender.send(EmulatorEvent::KeyUp(key)).unwrap();
-                            // &emulator.key_up(&key);
+                            // input_sender.send(EmulatorEvent::KeyUp(key)).unwrap();
+                            &emulator.key_up(&key);
                         }
                         _ => (),
                     }
@@ -284,7 +295,7 @@ fn main() -> Result<(), Error> {
                     }
                 }
                 WindowEvent::DroppedFile(file) => {
-                    //new_emulator(&file, &window, &mut emulator, &config_path);
+                    new_emulator(&file, &window, &mut emulator, &config_path);
                 }
                 _ => (),
             },
@@ -296,7 +307,10 @@ fn main() -> Result<(), Error> {
             if event.id == open.id() {
                 let file = file_dialog(None);
                 if file.is_some() {
-                    // new_emulator(&file.unwrap(), &window, &mut emulator, &config_path);
+                    new_emulator(&file.unwrap(), &window, &mut emulator, &config_path);
+                    //new_emulator(&file.unwrap(), &window, &config_path, &input_sender);
+
+                    //println!("Elapsed: {:.2?}", elapsed);
                 }
             } else if event.id == config.id() {
                 opener::open(&config_path).unwrap();
@@ -304,8 +318,6 @@ fn main() -> Result<(), Error> {
             println!("{event:?}");
         }
     });
-
-    // let _ = emulator_thread.join();
 }
 
 fn log_error<E: std::error::Error + 'static>(method_name: &str, err: E) {
@@ -337,14 +349,48 @@ fn new_emulator(
     window.set_title(&emulator.title());
 }
 
+/*fn new_emulator(
+    file: &PathBuf,
+    window: &Window,
+    config_path: &PathBuf,
+    sender: &Sender<EmulatorEvent>,
+) {
+    sender
+        .send(EmulatorEvent::New(Emulator::new(
+            file,
+            Config::load(config_path),
+        )))
+        .unwrap();
+    //window.set_title(&emulator.title());
+}
+
 fn run_emulator(
     mut emulator: Box<Emulator>,
-    sender: Sender<EmulatorEvent>,
+    sender: SyncSender<EmulatorEvent>,
     receiver: Receiver<EmulatorEvent>,
 ) {
-    let mut now = Instant::now();
+    let ticks = (4194304f64 / 1000.0 * 16.0).round() as u32;
+    let mut clock = 0;
+
+    //let interval = Duration::from_nanos(25000);
+    //let mut next_time = Instant::now() + interval;
 
     'outer: loop {
+        while clock < ticks {
+            clock += emulator.step() as u32 * 4;
+
+            if emulator.updated() {
+                match sender.try_send(EmulatorEvent::Draw(emulator.draw())) {
+                    Err(TrySendError::Disconnected(_)) => break 'outer,
+                    _ => (),
+                }
+            }
+        }
+
+        //println!("hello");
+
+        clock -= ticks;
+
         match receiver.try_recv() {
             Ok(EmulatorEvent::KeyDown(key)) => {
                 emulator.key_down(&key);
@@ -352,13 +398,20 @@ fn run_emulator(
             Ok(EmulatorEvent::KeyUp(key)) => {
                 emulator.key_up(&key);
             }
-            Err(TryRecvError::Disconnected) => break 'outer,
+            Ok(EmulatorEvent::New(new_emulator)) => {
+                emulator = new_emulator;
 
+                println!("{}", &emulator.title());
+                //println!("Elapsed: {:.2?}", elapsed);
+            }
+            Err(TryRecvError::Disconnected) => break 'outer,
+            //drop(emulator);
             _ => (),
         }
-        if now.elapsed().as_millis() >= (16.75 as u128) {
-            let _ = sender.send(EmulatorEvent::Draw(emulator.draw()));
-            now = Instant::now();
-        }
+
+        //thread::sleep(next_time - Instant::now());
+        //next_time += interval;
     }
+    drop(emulator);
 }
+*/
