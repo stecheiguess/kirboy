@@ -30,5 +30,5 @@ impl Channel for Noise {
         true
     }
 
-    fn step(&mut self) {}
+    fn step(&mut self, m_cycles: u8) {}
 }

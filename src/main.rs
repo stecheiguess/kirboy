@@ -2,7 +2,7 @@
 //#![forbid(unsafe_code)]
 
 use config::Config;
-use dirs::{config_local_dir, desktop_dir};
+use dirs::{config_local_dir, desktop_dir, download_dir};
 use emulator::{joypad::Input, Emulator};
 //use kirboy::cartridge::Cartridge;
 //use kirboy::{ gpu, mmu };
@@ -230,15 +230,13 @@ fn main() -> Result<(), Error> {
 
         match event {
             Event::RedrawRequested(_) => {
-                while clock < ticks {
-                    clock += emulator.step() as u32 * 4;
-
-                    if emulator.updated() {
-                        pixels.frame_mut().copy_from_slice(&emulator.draw());
-                    }
+                while !emulator.updated() {
+                    emulator.step();
                 }
 
-                clock -= ticks;
+                pixels.frame_mut().copy_from_slice(&emulator.draw());
+
+                //clock -= ticks;
                 // pixels.frame_mut().copy_from_slice(&emulator.draw());
 
                 if let Err(err) = pixels.render() {
@@ -327,12 +325,18 @@ fn log_error<E: std::error::Error + 'static>(method_name: &str, err: E) {
     }
 }
 
-fn file_dialog(path: Option<&Path>) -> Option<PathBuf> {
+fn file_dialog(path: Option<PathBuf>) -> Option<PathBuf> {
     let file = FileDialog::new()
         .add_filter("gameboy rom", &["gb"])
         .set_directory(match path {
             Some(folder) => folder,
-            None => Path::new("/"),
+            None =>
+            //Path::new("/").into(),
+            {
+                let mut dir = download_dir().unwrap();
+                dir.push("gameboy_roms");
+                dir
+            }
         })
         .pick_file();
     println!("{:?}", file);
