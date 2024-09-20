@@ -64,8 +64,8 @@ impl Channel for Square {
         }
     }
 
-    fn on() -> bool {
-        true
+    fn on(&self) -> bool {
+        self.on
     }
 
     fn step(&mut self, m_cycles: u8) {

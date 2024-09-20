@@ -26,7 +26,7 @@ impl Channel for Noise {
         }
     }
 
-    fn on() -> bool {
+    fn on(&self) -> bool {
         true
     }
 
