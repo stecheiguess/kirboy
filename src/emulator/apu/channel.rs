@@ -64,47 +64,10 @@ impl Envelope {
     }
 }
 
-pub struct Sweep {
-    pub period: u8,
-    // 0 = addition, 1 = subtraction
-    pub direction: bool,
-    pub shift: u8,
-    pub on: bool,
-    pub timer: u8,
-    pub frequency: u8,
-}
-
-impl Sweep {
-    pub fn new() -> Self {
-        Self {
-            period: 0,
-            direction: false,
-            shift: 0,
-            on: false,
-            timer: 0,
-            frequency: 0,
-        }
-    }
-
-    pub fn read(&self) -> u8 {
-        (self.period & 0x7) << 4 | (self.direction as u8) << 3 | self.shift & 0x7
-    }
-
-    pub fn write(&mut self, value: u8) {
-        self.period = value >> 4;
-        self.direction = value & 0x8 == 0x8;
-        self.shift = value & 0x7;
-    }
-
-    pub fn trigger(&mut self) {}
-
-    pub fn step(&mut self) {}
-}
-
 pub struct Length {
-    timer: u16,
-    on: bool,
-    max: u16,
+    pub timer: u16,
+    pub on: bool,
+    pub max: u16,
 }
 
 impl Length {
@@ -117,11 +80,7 @@ impl Length {
     }
 
     pub fn active(&self) -> bool {
-        self.timer < self.max
-    }
-
-    pub fn enable(&mut self, enabled: bool) {
-        self.on = enabled;
+        self.timer > 0
     }
 
     fn set(&mut self, timer: u16) {
@@ -134,6 +93,12 @@ impl Length {
             if self.timer == 0 {
                 self.on = false
             }
+        }
+    }
+
+    pub fn trigger(&mut self) {
+        if self.timer == 0 {
+            self.timer == self.max;
         }
     }
 }

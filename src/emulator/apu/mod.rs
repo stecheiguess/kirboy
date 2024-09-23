@@ -1,6 +1,7 @@
 mod channel;
 mod noise;
 mod square;
+mod wave;
 
 #[derive(Copy, Clone, Debug)]
 pub struct APU {
