@@ -103,6 +103,8 @@ impl Channel for Square {
                     3 => self.duty = 0xFC,
                     _ => panic!("Invalid write for Square Duty"),
                 }
+
+                self.length.set(value as u16 & 0x3F);
                 //self.timer = value & 0x3F
             }
 
@@ -142,7 +144,6 @@ impl Channel for Square {
             _ => panic!("Invalid write for Square"),
         }
     }
-
     fn on(&self) -> bool {
         self.on
     }

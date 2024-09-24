@@ -83,7 +83,7 @@ impl Length {
         self.timer > 0
     }
 
-    fn set(&mut self, timer: u16) {
+    pub fn set(&mut self, timer: u16) {
         self.timer = self.max - timer;
     }
 
