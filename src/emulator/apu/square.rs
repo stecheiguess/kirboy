@@ -155,9 +155,10 @@ impl Channel for Square {
                 let ampl = if self.duty_phase() { 99 } else { 0 };
 
                 if ampl != self.ampl {
-                    self.from = self.from.wrapping_add(self.period() as u32);
                     self.blip.add_delta(self.from, ampl - self.ampl);
+                    self.ampl = ampl
                 }
+                self.from = self.from.wrapping_add(self.period() as u32);
                 self.duty_step = (self.duty_step + 1) % 8;
                 self.timer = 0;
             }
@@ -197,8 +198,4 @@ impl Sweep {
         self.direction = value & 0x8 == 0x8;
         self.shift = value & 0x7;
     }
-
-    pub fn trigger(&mut self) {}
-
-    pub fn step(&mut self) {}
 }

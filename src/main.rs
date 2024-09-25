@@ -127,6 +127,17 @@ fn main() -> Result<(), Error> {
         Pixels::new(WIDTH, HEIGHT, surface_texture)?
     };
 
+    let quit = MenuItem::with_id(
+        "quit",
+        "Quit",
+        true,
+        Some(if cfg!(target_os = "macos") {
+            Accelerator::new(Some(Modifiers::SUPER), Code::KeyQ)
+        } else {
+            Accelerator::new(Some(Modifiers::CONTROL), Code::KeyQ)
+        }),
+    );
+
     #[cfg(target_os = "macos")]
     {
         let app_m = Submenu::new("App", true);
@@ -140,7 +151,8 @@ fn main() -> Result<(), Error> {
             &PredefinedMenuItem::hide_others(None),
             &PredefinedMenuItem::show_all(None),
             &PredefinedMenuItem::separator(),
-            &PredefinedMenuItem::quit(None),
+            //&PredefinedMenuItem::quit(None),
+            &quit,
         ]);
     }
 
@@ -312,7 +324,10 @@ fn main() -> Result<(), Error> {
                 }
             } else if event.id == config.id() {
                 opener::open(&config_path).unwrap();
+            } else if event.id == quit.id() {
+                *control_flow = ControlFlow::Exit;
             }
+
             println!("{event:?}");
         }
     });

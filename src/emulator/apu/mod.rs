@@ -5,7 +5,7 @@ mod wave;
 
 #[derive(Copy, Clone, Debug)]
 pub struct APU {
-    enable: bool,
+    on: bool,
     panning: u8,
     volume_left: u8,
     volume_right: u8,
@@ -14,7 +14,7 @@ pub struct APU {
 impl APU {
     pub fn new() -> Self {
         Self {
-            enable: false,
+            on: false,
             /*ch1: false,
             ch2: false,
             ch3: false,
@@ -29,7 +29,7 @@ impl APU {
         match address {
             //0xff24 => { self.v }
             0xff25 => self.panning,
-            0xff26 => (self.enable as u8) << 7,
+            0xff26 => (self.on as u8) << 7,
             _ => panic!("Invalid read for APU"),
         }
     }
@@ -46,7 +46,7 @@ impl APU {
             }
 
             0xff26 => {
-                self.enable = ((value >> 7) & 0b1) != 0;
+                self.on = ((value >> 7) & 0b1) != 0;
             }
             _ => panic!("Invalid write for APU"),
         }
