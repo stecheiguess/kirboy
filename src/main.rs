@@ -263,10 +263,9 @@ fn main() -> Result<(), Error> {
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::KeyboardInput { event: input, .. } => {
                     match (input.state, input.logical_key) {
-                        (ElementState::Pressed, Key::Escape) => {
+                        /*(ElementState::Pressed, Key::Escape) => {
                             *control_flow = ControlFlow::Exit;
-                        }
-
+                        }*/
                         (ElementState::Pressed, Key::Character("g")) => {
                             &emulator.green();
                         }
@@ -310,6 +309,9 @@ fn main() -> Result<(), Error> {
                 _ => (),
             },
 
+            /*Event::Opened { urls } => match urls {
+                _ => opener::open(&config_path).unwrap(), //println!("{:?}", urls),
+            },*/
             _ => (),
         }
 

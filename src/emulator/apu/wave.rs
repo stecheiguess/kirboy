@@ -4,6 +4,7 @@ use super::channel::{Channel, Envelope, Length};
 
 pub struct Wave {
     length: Length,
+    timer: usize,
     wave_ram: [u8; 16],
     on: bool,
     volume: u8,
@@ -104,21 +105,25 @@ impl Channel for Wave {
         };
 
         for _ in 0..(m_cycles * 4) {
-            let sample = if self.wave_index & 0x1 == 0 {
-                self.wave_ram[self.wave_index >> 1] & 0xf
-            } else {
-                self.wave_ram[self.wave_index >> 1] >> 4
-            };
+            self.timer += 1;
+            if self.timer >= self.period() {
+                let sample = if self.wave_index & 0x1 == 0 {
+                    self.wave_ram[self.wave_index >> 1] & 0xf
+                } else {
+                    self.wave_ram[self.wave_index >> 1] >> 4
+                };
 
-            let ampl = if self.on {
-                (sample >> volume) as i32
-            } else {
-                0x00
-            };
+                let ampl = if self.on {
+                    (sample >> volume) as i32
+                } else {
+                    0x00
+                };
 
-            if ampl != self.ampl {
-                self.blip.add_delta(self.from, ampl - self.ampl);
-                self.ampl = ampl;
+                if ampl != self.ampl {
+                    self.blip.add_delta(self.from, ampl - self.ampl);
+                    self.ampl = ampl;
+                }
+                self.timer = 0;
             }
         }
     }
