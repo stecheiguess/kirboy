@@ -47,6 +47,8 @@ enim ad minim veniam, quis nostrud exercitation ullamco laboris
 nisi ut aliquip ex ea commodo consequat.
 """
 
+[package.metadata.packager]
+before-packaging-command = "cargo build --release"
 
 [package.metadata.bundle.bin.tao]
 name = "kirboy"
