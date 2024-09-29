@@ -1,1 +1,7 @@
 /target
+
+/.vscode
+
+/.DS_Store
+/rustfmt.toml
+
