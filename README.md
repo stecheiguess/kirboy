@@ -1,3 +1,3 @@
 # kirboy
 
-basic gameboy (DMG) emulator for NEA coursework written in rust
+basic gameboy (DMG) emulator written in rust
