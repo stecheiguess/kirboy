@@ -6,20 +6,33 @@ pub struct Square {
     on: bool,
     duty: u8,
     frequency: u16,
-    timer: usize,
+    clock: u32,
     duty_step: u8,
-    // sample: usize,
-    blip: BlipBuf,
+    //blip: BlipBuf,
     ampl: i32,
-    from: u32,
     sweep: Sweep,
-    length: Length,
-    envelope: Envelope,
+    pub length: Length,
+    pub envelope: Envelope,
+    has_sweep: bool,
 }
 
 impl Square {
-    fn period(&self) -> usize {
-        (2048 - self.frequency as usize) * 4
+    pub fn new(has_sweep: bool) -> Self {
+        Self {
+            on: false,
+            duty: 1,
+            frequency: 0,
+            clock: 2048,
+            duty_step: 0,
+            ampl: 0,
+            sweep: Sweep::new(),
+            length: Length::new(64),
+            envelope: Envelope::new(),
+            has_sweep,
+        }
+    }
+    fn period(&self) -> u32 {
+        (2048 - self.frequency as u32) * 4
     }
 
     fn duty_phase(&self) -> bool {
@@ -42,15 +55,15 @@ impl Square {
         new_frequency
     }
 
-    fn sweep_step(&mut self) {
-        if self.sweep.timer > 0 {
-            self.sweep.timer -= 1
+    pub fn sweep_step(&mut self) {
+        if self.sweep.clock > 0 {
+            self.sweep.clock -= 1
         }
-        if self.sweep.timer == 0 {
+        if self.sweep.clock == 0 {
             if self.sweep.period > 0 {
-                self.sweep.timer = self.sweep.period
+                self.sweep.clock = self.sweep.period
             } else {
-                self.sweep.timer = 8
+                self.sweep.clock = 8
             }
         }
 
@@ -68,7 +81,7 @@ impl Square {
 
     fn sweep_trigger(&mut self) {
         self.sweep.frequency = self.frequency;
-        self.sweep.timer = if self.sweep.period > 0 {
+        self.sweep.clock = if self.sweep.period > 0 {
             self.sweep.period
         } else {
             8
@@ -105,7 +118,7 @@ impl Channel for Square {
                 }
 
                 self.length.set(value as u16 & 0x3F);
-                //self.timer = value & 0x3F
+                //self.clock = value & 0x3F
             }
 
             // nrx2
@@ -132,7 +145,9 @@ impl Channel for Square {
 
                     self.length.trigger();
 
-                    self.sweep_trigger();
+                    if self.has_sweep {
+                        self.sweep_trigger();
+                    }
 
                     self.envelope.trigger();
                 }
@@ -148,19 +163,19 @@ impl Channel for Square {
         self.on
     }
 
-    fn step(&mut self, m_cycles: u8) {
-        for _ in 0..(m_cycles * 4) {
-            self.timer += 1;
-            if self.timer >= self.period() {
+    fn step(&mut self, t_cycles: u32) {
+        for _ in 0..(t_cycles) {
+            self.clock += 1;
+            if self.clock >= self.period() {
                 let ampl = if self.duty_phase() { 99 } else { 0 };
 
                 if ampl != self.ampl {
-                    self.blip.add_delta(self.from, ampl - self.ampl);
+                    //self.blip.add_delta(self.from, ampl - self.ampl);
                     self.ampl = ampl
                 }
-                self.from = self.from.wrapping_add(self.period() as u32);
+
                 self.duty_step = (self.duty_step + 1) % 8;
-                self.timer = 0;
+                self.clock = 0;
             }
             //self.sample = 99
         }
@@ -173,7 +188,7 @@ pub struct Sweep {
     pub direction: bool,
     pub shift: u8,
     pub on: bool,
-    pub timer: u8,
+    pub clock: u8,
     pub frequency: u16,
 }
 
@@ -184,7 +199,7 @@ impl Sweep {
             direction: false,
             shift: 0,
             on: false,
-            timer: 0,
+            clock: 0,
             frequency: 0,
         }
     }

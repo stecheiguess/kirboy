@@ -49,6 +49,13 @@ nisi ut aliquip ex ea commodo consequat.
 
 [package.metadata.packager]
 before-packaging-command = "cargo build --release"
+product_name = "kirboy"
+version = "0.1.0"
+identifier = "net.steche.kirboy"
+description = "A GameBoy (DMG-01) Emulator."
+copyright = "Copyright (c) Steche 2024. All rights reserved."
+icons = ["icons/32.png", "icons/128.png", "icons/512.png","icons/rounded@2x.png"]
+
 
 [package.metadata.bundle.bin.tao]
 name = "kirboy"

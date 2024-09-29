@@ -3,8 +3,8 @@ use blip_buf::BlipBuf;
 use super::channel::{Channel, Envelope, Length};
 
 pub struct Wave {
-    length: Length,
-    timer: usize,
+    pub length: Length,
+    clock: u32,
     wave_ram: [u8; 16],
     on: bool,
     volume: u8,
@@ -12,14 +12,25 @@ pub struct Wave {
     ampl: i32,
     wave_index: usize,
     from: u32,
-    blip: BlipBuf,
 }
 
 impl Wave {
-    pub fn new() {}
+    pub fn new() -> Self {
+        Self {
+            length: Length::new(256),
+            clock: 0,
+            wave_ram: [0; 16],
+            on: false,
+            volume: 0,
+            frequency: 0,
+            ampl: 0,
+            wave_index: 0,
+            from: 0,
+        }
+    }
 
-    fn period(&self) -> usize {
-        (2048 - self.frequency as usize) * 2
+    fn period(&self) -> u32 {
+        (2048 - self.frequency as u32) * 2
     }
 }
 
@@ -95,7 +106,7 @@ impl Channel for Wave {
         }
     }
 
-    fn step(&mut self, m_cycles: u8) {
+    fn step(&mut self, t_cycles: u32) {
         let volume = match self.volume {
             0 => 4,
             1 => 0,
@@ -104,9 +115,9 @@ impl Channel for Wave {
             _ => panic!("Invalid match for Wave Volume"),
         };
 
-        for _ in 0..(m_cycles * 4) {
-            self.timer += 1;
-            if self.timer >= self.period() {
+        for _ in 0..(t_cycles) {
+            self.clock += 1;
+            if self.clock >= self.period() {
                 let sample = if self.wave_index & 0x1 == 0 {
                     self.wave_ram[self.wave_index >> 1] & 0xf
                 } else {
@@ -120,10 +131,10 @@ impl Channel for Wave {
                 };
 
                 if ampl != self.ampl {
-                    self.blip.add_delta(self.from, ampl - self.ampl);
+                    //self.blip.add_delta(self.from, ampl - self.ampl);
                     self.ampl = ampl;
                 }
-                self.timer = 0;
+                self.clock = 0;
             }
         }
     }

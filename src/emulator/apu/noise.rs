@@ -4,21 +4,32 @@ use super::channel::{Channel, Envelope, Length};
 
 pub struct Noise {
     on: bool,
-    length: Length,
-    envelope: Envelope,
+    pub length: Length,
+    pub envelope: Envelope,
     divisor_code: u8,
     shift: u8,
     lfsr: LFSR,
-    blip: BlipBuf,
-    timer: usize,
+    clock: u32,
 }
 
 impl Noise {
-    fn period(&self) -> usize {
-        (self.divisor() as usize) << (self.shift as usize)
+    pub fn new() -> Self {
+        Self {
+            on: false,
+            length: Length::new(64),
+            envelope: Envelope::new(),
+            divisor_code: 0,
+            shift: 0,
+            lfsr: LFSR::new(),
+            clock: 0,
+        }
     }
 
-    fn divisor(&self) -> usize {
+    fn period(&self) -> u32 {
+        (self.divisor() as u32) << (self.shift as u32)
+    }
+
+    fn divisor(&self) -> u32 {
         match self.divisor_code {
             0 => 8,
             1 => 16,
@@ -79,10 +90,10 @@ impl Channel for Noise {
         self.on
     }
 
-    fn step(&mut self, m_cycles: u8) {
-        for _ in 0..(m_cycles * 4) {
-            if self.timer >= self.period() {
-                self.timer = 0;
+    fn step(&mut self, t_cycles: u32) {
+        for _ in 0..(t_cycles) {
+            if self.clock >= self.period() {
+                self.clock = 0;
             }
         }
     }
