@@ -9,26 +9,30 @@ pub struct Square {
     clock: u32,
     duty_step: u8,
     //blip: BlipBuf,
-    ampl: i32,
     sweep: Sweep,
     pub length: Length,
     pub envelope: Envelope,
     has_sweep: bool,
+    pub blip: BlipBuf,
+    pub from: u32,
+    ampl: i32,
 }
 
 impl Square {
-    pub fn new(has_sweep: bool) -> Self {
+    pub fn new(blip: BlipBuf, has_sweep: bool) -> Self {
         Self {
             on: false,
             duty: 1,
             frequency: 0,
             clock: 2048,
             duty_step: 0,
-            ampl: 0,
             sweep: Sweep::new(),
             length: Length::new(64),
             envelope: Envelope::new(),
             has_sweep,
+            blip,
+            from: 0,
+            ampl: 0,
         }
     }
     fn period(&self) -> u32 {
@@ -36,7 +40,14 @@ impl Square {
     }
 
     fn duty_phase(&self) -> bool {
-        (self.duty >> self.duty_step) & 0x01 != 0
+        let duty = match self.duty {
+            0 => 0x1,
+            1 => 0x3,
+            2 => 0xF,
+            3 => 0xFC,
+            _ => panic!(),
+        };
+        (duty >> self.duty_step) & 0x01 != 0
     }
 
     fn sweep_calc_frequency(&mut self) -> u16 {
@@ -97,6 +108,15 @@ impl Channel for Square {
     fn read(&self, address: u16) -> u8 {
         match address {
             0xff10 => self.sweep.read(),
+
+            0xFF11 | 0xFF16 => ((self.duty & 3) << 6) | 0x3F,
+
+            0xFF12 | 0xFF17 => self.envelope.read(),
+
+            0xFF13 | 0xFF18 => 0xFF,
+
+            0xFF14 | 0xFF19 => 0x80 | if self.length.on { 0x40 } else { 0 } | 0x3F,
+
             _ => panic!("Invalid read for Square"),
         }
     }
@@ -109,13 +129,7 @@ impl Channel for Square {
             }
             // nrx1
             0xff11 | 0xff16 => {
-                match value >> 6 {
-                    0 => self.duty = 0x1,
-                    1 => self.duty = 0x3,
-                    2 => self.duty = 0xF,
-                    3 => self.duty = 0xFC,
-                    _ => panic!("Invalid write for Square Duty"),
-                }
+                self.duty = value >> 6;
 
                 self.length.set(value as u16 & 0x3F);
                 //self.clock = value & 0x3F
@@ -167,17 +181,17 @@ impl Channel for Square {
         for _ in 0..(t_cycles) {
             self.clock += 1;
             if self.clock >= self.period() {
-                let ampl = if self.duty_phase() { 99 } else { 0 };
+                let ampl = if self.duty_phase() { 1 } else { -1 };
 
-                if ampl != self.ampl {
-                    //self.blip.add_delta(self.from, ampl - self.ampl);
-                    self.ampl = ampl
-                }
+                self.from = self.from.wrapping_add(self.clock);
+
+                let d = ampl - self.ampl;
+                self.ampl = ampl;
+                self.blip.add_delta(self.from, d);
 
                 self.duty_step = (self.duty_step + 1) % 8;
                 self.clock = 0;
             }
-            //self.sample = 99
         }
     }
 }

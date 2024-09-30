@@ -30,6 +30,9 @@ use muda::{
     PredefinedMenuItem, Submenu,
 };
 
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use cpal::{Data, FromSample, Sample, SampleFormat, SizedSample};
+
 mod config;
 mod emulator;
 
@@ -50,6 +53,16 @@ enum EmulatorEvent {
     KeyDown(Key<'static>),
     New(Box<Emulator>),
     Draw(Vec<u8>),
+}
+
+// Sound Player
+
+struct Player {}
+
+impl Player {
+    pub fn new() -> Self {
+        Self {}
+    }
 }
 
 fn main() -> Result<(), Error> {
@@ -92,6 +105,88 @@ fn main() -> Result<(), Error> {
 
     //thread::spawn(move || run_emulator(emulator, frame_sender, input_receiver));
 
+    // ----
+
+    let host = cpal::default_host();
+    let device = host
+        .default_output_device()
+        .expect("no output device available");
+    let s = device.name().expect("no name");
+
+    println!("{}", s);
+
+    let mut supported_configs_range = device
+        .supported_output_configs()
+        .expect("error while querying configs");
+
+    let supported_config = supported_configs_range
+        .next()
+        .expect("no supported config?!")
+        .with_max_sample_rate();
+
+    let sample_format = supported_config.sample_format();
+
+    let config = supported_config.into();
+
+    let mut audio_buffer = emulator.audio_buffer();
+
+    let err_fn = |err| eprintln!("an error occurred on stream: {}", err);
+
+    let stream = match sample_format {
+        cpal::SampleFormat::F32 => device
+            .build_output_stream(
+                &config,
+                move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+                    let len = std::cmp::min(data.len() / 2, audio_buffer.lock().unwrap().len());
+                    for (i, (data_l, data_r)) in
+                        audio_buffer.lock().unwrap().drain(..len).enumerate()
+                    {
+                        data[i * 2 + 0] = data_l;
+                        data[i * 2 + 1] = data_r;
+                    }
+                },
+                err_fn,
+                None,
+            )
+            .unwrap(),
+        cpal::SampleFormat::F64 => device
+            .build_output_stream(
+                &config,
+                move |data: &mut [f64], _: &cpal::OutputCallbackInfo| {
+                    let len = std::cmp::min(data.len() / 2, audio_buffer.lock().unwrap().len());
+                    for (i, (data_l, data_r)) in
+                        audio_buffer.lock().unwrap().drain(..len).enumerate()
+                    {
+                        data[i * 2 + 0] = data_l.to_sample::<f64>();
+                        data[i * 2 + 1] = data_r.to_sample::<f64>();
+                    }
+                },
+                err_fn,
+                None,
+            )
+            .unwrap(),
+        _ => panic!("unreachable"),
+    };
+    stream.play().unwrap();
+
+    //
+
+    /*let stream = device
+        .build_output_stream(
+            &config,
+            move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
+                write_data(data, channels, &mut next_value)
+            },
+            err_fn,
+            None,
+        )
+        .unwrap();
+    stream.play().unwrap();
+
+    let _ = stream;*/
+
+    // ---
+
     // event loop for window.
     let event_loop = { event_loop_builder.build() };
 
@@ -101,7 +196,7 @@ fn main() -> Result<(), Error> {
         #[cfg(target_os = "macos")]
         {
             WindowBuilder::new()
-                //.with_title(&emulator.title())
+                .with_title(&emulator.title())
                 .with_inner_size(size)
                 .with_min_inner_size(size)
                 .with_titlebar_transparent(true)
@@ -112,7 +207,7 @@ fn main() -> Result<(), Error> {
         #[cfg(target_os = "windows")]
         {
             WindowBuilder::new()
-                //.with_title(&emulator.title())
+                .with_title(&emulator.title())
                 .with_inner_size(size)
                 .with_min_inner_size(size)
                 //.with_transparent(true)

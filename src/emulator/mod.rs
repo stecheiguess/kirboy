@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 use std::{
@@ -129,6 +130,10 @@ impl Emulator {
         self.color.id2 = [48, 98, 48];
         self.color.id3 = [15, 56, 15];
         println!("to green")
+    }
+
+    pub fn audio_buffer(&self) -> Arc<Mutex<Vec<(f32, f32)>>> {
+        self.cpu.mmu.apu.buffer.clone()
     }
 
     pub fn save(&mut self) {

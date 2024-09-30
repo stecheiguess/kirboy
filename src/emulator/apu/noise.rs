@@ -10,10 +10,12 @@ pub struct Noise {
     shift: u8,
     lfsr: LFSR,
     clock: u32,
+    pub from: u32,
+    pub blip: BlipBuf,
 }
 
 impl Noise {
-    pub fn new() -> Self {
+    pub fn new(blip: BlipBuf) -> Self {
         Self {
             on: false,
             length: Length::new(64),
@@ -22,6 +24,8 @@ impl Noise {
             shift: 0,
             lfsr: LFSR::new(),
             clock: 0,
+            from: 0,
+            blip,
         }
     }
 

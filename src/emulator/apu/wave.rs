@@ -11,11 +11,12 @@ pub struct Wave {
     frequency: u16,
     ampl: i32,
     wave_index: usize,
-    from: u32,
+    pub from: u32,
+    pub blip: BlipBuf,
 }
 
 impl Wave {
-    pub fn new() -> Self {
+    pub fn new(blip: BlipBuf) -> Self {
         Self {
             length: Length::new(256),
             clock: 0,
@@ -26,6 +27,7 @@ impl Wave {
             ampl: 0,
             wave_index: 0,
             from: 0,
+            blip,
         }
     }
 
@@ -130,10 +132,13 @@ impl Channel for Wave {
                     0x00
                 };
 
-                if ampl != self.ampl {
-                    //self.blip.add_delta(self.from, ampl - self.ampl);
-                    self.ampl = ampl;
-                }
+                self.from = self.from.wrapping_add(self.clock);
+
+                let d = ampl - self.ampl;
+                self.ampl = ampl;
+                self.blip.add_delta(self.from, d);
+
+                self.wave_index = (self.wave_index + 1) % 32;
                 self.clock = 0;
             }
         }
