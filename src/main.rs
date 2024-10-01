@@ -4,14 +4,12 @@
 use config::Config;
 use dirs::{config_local_dir, desktop_dir, download_dir};
 use emulator::{joypad::Input, Emulator};
-//use kirboy::cartridge::Cartridge;
-//use kirboy::{ gpu, mmu };
-//use env_logger::DEFAULT_WRITE_STYLE_ENV;
 use error_iter::ErrorIter as _;
 use log::error;
 use pixels::{Error, Pixels, SurfaceTexture};
+use player::Player;
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::{channel, Receiver, Sender, SyncSender, TrySendError};
+use std::sync::mpsc::{channel, Receiver, SendError, Sender, SyncSender, TrySendError};
 use std::sync::mpsc::{sync_channel, TryRecvError};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -31,10 +29,11 @@ use muda::{
 };
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::{Data, FromSample, Sample, SampleFormat, SizedSample};
+use cpal::{Data, FromSample, Sample, SampleFormat, SizedSample, Stream, StreamError};
 
 mod config;
 mod emulator;
+mod player;
 
 #[cfg(target_os = "macos")]
 use tao::platform::macos::WindowBuilderExtMacOS;
@@ -53,16 +52,9 @@ enum EmulatorEvent {
     KeyDown(Key<'static>),
     New(Box<Emulator>),
     Draw(Vec<u8>),
-}
-
-// Sound Player
-
-struct Player {}
-
-impl Player {
-    pub fn new() -> Self {
-        Self {}
-    }
+    Exit,
+    Play,
+    Pause,
 }
 
 fn main() -> Result<(), Error> {
@@ -96,96 +88,10 @@ fn main() -> Result<(), Error> {
         panic!("No file selected");
     }
 
-    let (frame_sender, frame_receiver): (SyncSender<EmulatorEvent>, Receiver<EmulatorEvent>) =
+    let (output_sender, output_receiver): (SyncSender<EmulatorEvent>, Receiver<EmulatorEvent>) =
         sync_channel(1);
     let (input_sender, input_receiver): (Sender<EmulatorEvent>, Receiver<EmulatorEvent>) =
         channel();
-
-    let mut emulator = Emulator::new(&file.unwrap(), Config::load(&config_path));
-
-    //thread::spawn(move || run_emulator(emulator, frame_sender, input_receiver));
-
-    // ----
-
-    let host = cpal::default_host();
-    let device = host
-        .default_output_device()
-        .expect("no output device available");
-    let s = device.name().expect("no name");
-
-    println!("{}", s);
-
-    let mut supported_configs_range = device
-        .supported_output_configs()
-        .expect("error while querying configs");
-
-    let supported_config = supported_configs_range
-        .next()
-        .expect("no supported config?!")
-        .with_max_sample_rate();
-
-    let sample_format = supported_config.sample_format();
-
-    let config = supported_config.into();
-
-    let mut audio_buffer = emulator.audio_buffer();
-
-    let err_fn = |err| eprintln!("an error occurred on stream: {}", err);
-
-    let stream = match sample_format {
-        cpal::SampleFormat::F32 => device
-            .build_output_stream(
-                &config,
-                move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-                    let len = std::cmp::min(data.len() / 2, audio_buffer.lock().unwrap().len());
-                    for (i, (data_l, data_r)) in
-                        audio_buffer.lock().unwrap().drain(..len).enumerate()
-                    {
-                        data[i * 2 + 0] = data_l;
-                        data[i * 2 + 1] = data_r;
-                    }
-                },
-                err_fn,
-                None,
-            )
-            .unwrap(),
-        cpal::SampleFormat::F64 => device
-            .build_output_stream(
-                &config,
-                move |data: &mut [f64], _: &cpal::OutputCallbackInfo| {
-                    let len = std::cmp::min(data.len() / 2, audio_buffer.lock().unwrap().len());
-                    for (i, (data_l, data_r)) in
-                        audio_buffer.lock().unwrap().drain(..len).enumerate()
-                    {
-                        data[i * 2 + 0] = data_l.to_sample::<f64>();
-                        data[i * 2 + 1] = data_r.to_sample::<f64>();
-                    }
-                },
-                err_fn,
-                None,
-            )
-            .unwrap(),
-        _ => panic!("unreachable"),
-    };
-    stream.play().unwrap();
-
-    //
-
-    /*let stream = device
-        .build_output_stream(
-            &config,
-            move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
-                write_data(data, channels, &mut next_value)
-            },
-            err_fn,
-            None,
-        )
-        .unwrap();
-    stream.play().unwrap();
-
-    let _ = stream;*/
-
-    // ---
 
     // event loop for window.
     let event_loop = { event_loop_builder.build() };
@@ -196,7 +102,6 @@ fn main() -> Result<(), Error> {
         #[cfg(target_os = "macos")]
         {
             WindowBuilder::new()
-                .with_title(&emulator.title())
                 .with_inner_size(size)
                 .with_min_inner_size(size)
                 .with_titlebar_transparent(true)
@@ -207,7 +112,6 @@ fn main() -> Result<(), Error> {
         #[cfg(target_os = "windows")]
         {
             WindowBuilder::new()
-                .with_title(&emulator.title())
                 .with_inner_size(size)
                 .with_min_inner_size(size)
                 //.with_transparent(true)
@@ -215,6 +119,16 @@ fn main() -> Result<(), Error> {
                 .unwrap()
         }
     };
+
+    let mut player = new_emulator(&file.unwrap(), &window, &config_path, &input_sender);
+
+    // Start the emulator in a separate thread
+    let emulator_thread = thread::spawn(move || {
+        // This thread runs the emulator loop
+        if let Ok(EmulatorEvent::New(emulator)) = input_receiver.recv() {
+            run_emulator(emulator, output_sender, input_receiver);
+        }
+    });
 
     let mut pixels = {
         let window_size = window.inner_size();
@@ -322,33 +236,26 @@ fn main() -> Result<(), Error> {
     let ticks = (4194304f64 / 1000.0 * 16.0).round() as u32;
     let mut clock = 0;
 
-    event_loop.run(move |event, _event_loop, control_flow| {
+    player.stream.play().unwrap();
+
+    //thread::spawn(move || run_emulator(emulator, output_sender, input_receiver));
+
+    event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
-
-        /*if now.elapsed().as_millis() >= (16.75 as u128) {
-            window.request_redraw();
-            now = Instant::now();
-        }*/
-
-        //let interval = Duration::from_nanos(25000);
-        //let mut next_time = Instant::now() + interval;
 
         window.request_redraw();
 
         match event {
             Event::RedrawRequested(_) => {
-                while !emulator.updated() {
-                    emulator.step();
+                match output_receiver.recv() {
+                    Ok(EmulatorEvent::Draw(buffer)) => pixels.frame_mut().copy_from_slice(&buffer),
+                    _ => (),
                 }
-
-                pixels.frame_mut().copy_from_slice(&emulator.draw());
-
-                //clock -= ticks;
-                // pixels.frame_mut().copy_from_slice(&emulator.draw());
 
                 if let Err(err) = pixels.render() {
                     log_error("pixels.render", err);
 
+                    input_sender.send(EmulatorEvent::Exit).unwrap();
                     *control_flow = ControlFlow::Exit;
 
                     return;
@@ -358,35 +265,26 @@ fn main() -> Result<(), Error> {
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::KeyboardInput { event: input, .. } => {
                     match (input.state, input.logical_key) {
-                        /*(ElementState::Pressed, Key::Escape) => {
-                            *control_flow = ControlFlow::Exit;
-                        }*/
                         (ElementState::Pressed, Key::Character("g")) => {
-                            &emulator.green();
+                            input_sender.send(EmulatorEvent::Pause).unwrap();
+                        }
+
+                        (ElementState::Pressed, Key::Character("h")) => {
+                            input_sender.send(EmulatorEvent::Play).unwrap();
                         }
 
                         (ElementState::Pressed, key) => {
-                            // input_sender.send(EmulatorEvent::KeyDown(key)).unwrap();
-                            &emulator.key_down(&key);
+                            input_sender.send(EmulatorEvent::KeyDown(key)).unwrap();
                         }
                         (ElementState::Released, key) => {
-                            // input_sender.send(EmulatorEvent::KeyUp(key)).unwrap();
-                            &emulator.key_up(&key);
+                            input_sender.send(EmulatorEvent::KeyUp(key)).unwrap();
                         }
                         _ => (),
                     }
                 }
 
-                WindowEvent::CursorMoved { position, .. } => {}
-                WindowEvent::MouseInput {
-                    state: ElementState::Released,
-                    button: MouseButton::Right,
-                    ..
-                } => {
-                    //show_context_menu(&window, &file_m, Some(window_cursor_position.into()));
-                }
-
                 WindowEvent::CloseRequested => {
+                    input_sender.send(EmulatorEvent::Exit).unwrap();
                     *control_flow = ControlFlow::Exit;
                 }
 
@@ -394,12 +292,15 @@ fn main() -> Result<(), Error> {
                     if let Err(err) = pixels.resize_surface(size.width, size.height) {
                         log_error("pixels.resize_surface", err);
 
+                        input_sender.send(EmulatorEvent::Exit).unwrap();
                         *control_flow = ControlFlow::Exit;
+
                         return;
                     }
                 }
                 WindowEvent::DroppedFile(file) => {
-                    new_emulator(&file, &window, &mut emulator, &config_path);
+                    player = new_emulator(&file, &window, &config_path, &input_sender);
+                    player.stream.play().unwrap();
                 }
                 _ => (),
             },
@@ -412,22 +313,26 @@ fn main() -> Result<(), Error> {
 
         if let Ok(event) = menu_channel.try_recv() {
             if event.id == open.id() {
-                let file = file_dialog(None);
-                if file.is_some() {
-                    new_emulator(&file.unwrap(), &window, &mut emulator, &config_path);
-                    //new_emulator(&file.unwrap(), &window, &config_path, &input_sender);
-
-                    //println!("Elapsed: {:.2?}", elapsed);
+                if let Ok(()) = input_sender.send(EmulatorEvent::Pause) {
+                    player.stream.pause().unwrap();
+                    let file = file_dialog(None);
+                    if file.is_some() {
+                        player = new_emulator(&file.unwrap(), &window, &config_path, &input_sender);
+                        player.stream.play().unwrap();
+                    }
                 }
             } else if event.id == config.id() {
                 opener::open(&config_path).unwrap();
             } else if event.id == quit.id() {
+                input_sender.send(EmulatorEvent::Exit).unwrap();
                 *control_flow = ControlFlow::Exit;
             }
 
             println!("{event:?}");
         }
     });
+
+    emulator_thread.join().unwrap();
 }
 
 fn log_error<E: std::error::Error + 'static>(method_name: &str, err: E) {
@@ -458,26 +363,18 @@ fn file_dialog(path: Option<PathBuf>) -> Option<PathBuf> {
 fn new_emulator(
     file: &PathBuf,
     window: &Window,
-    emulator: &mut Box<Emulator>,
-    config_path: &PathBuf,
-) {
-    *emulator = Emulator::new(file, Config::load(config_path));
-    window.set_title(&emulator.title());
-}
-
-/*fn new_emulator(
-    file: &PathBuf,
-    window: &Window,
     config_path: &PathBuf,
     sender: &Sender<EmulatorEvent>,
-) {
-    sender
-        .send(EmulatorEvent::New(Emulator::new(
-            file,
-            Config::load(config_path),
-        )))
-        .unwrap();
-    //window.set_title(&emulator.title());
+) -> Player {
+    let emulator = Emulator::new(file, Config::load(config_path));
+
+    window.set_title(&emulator.title());
+
+    // Send the emulator instance to the event loop
+    let player = Player::new(emulator.audio_buffer());
+    sender.send(EmulatorEvent::New(emulator)).unwrap();
+
+    player
 }
 
 fn run_emulator(
@@ -485,49 +382,63 @@ fn run_emulator(
     sender: SyncSender<EmulatorEvent>,
     receiver: Receiver<EmulatorEvent>,
 ) {
-    let ticks = (4194304f64 / 1000.0 * 16.0).round() as u32;
-    let mut clock = 0;
+    //let mut player = Player::new(emulator.audio_buffer());
+    //player.stream.play().unwrap();
 
-    //let interval = Duration::from_nanos(25000);
-    //let mut next_time = Instant::now() + interval;
-
-    'outer: loop {
-        while clock < ticks {
-            clock += emulator.step() as u32 * 4;
-
-            if emulator.updated() {
-                match sender.try_send(EmulatorEvent::Draw(emulator.draw())) {
-                    Err(TrySendError::Disconnected(_)) => break 'outer,
-                    _ => (),
-                }
-            }
-        }
-
-        //println!("hello");
-
-        clock -= ticks;
-
+    loop {
         match receiver.try_recv() {
             Ok(EmulatorEvent::KeyDown(key)) => {
+                // Handle key down
                 emulator.key_down(&key);
             }
             Ok(EmulatorEvent::KeyUp(key)) => {
+                // Handle key up
                 emulator.key_up(&key);
             }
             Ok(EmulatorEvent::New(new_emulator)) => {
+                // Switch to new emulator
                 emulator = new_emulator;
-
-                println!("{}", &emulator.title());
-                //println!("Elapsed: {:.2?}", elapsed);
+                //player = Player::new(emulator.audio_buffer());
+                //player.stream.play().unwrap();
             }
-            Err(TryRecvError::Disconnected) => break 'outer,
-            //drop(emulator);
+            Ok(EmulatorEvent::Pause) => {
+                // player.stream.pause().unwrap();
+            }
+            Ok(EmulatorEvent::Play) => {
+                // player.stream.play().unwrap();
+            }
+            Ok(EmulatorEvent::Exit) => {
+                // Exits Emulator
+                drop(emulator);
+                break;
+            }
+            Err(TryRecvError::Disconnected) => break,
             _ => (),
         }
 
-        //thread::sleep(next_time - Instant::now());
-        //next_time += interval;
+        // Emulator update and draw logic
+        if emulator.updated() {
+            let draw_data = emulator.draw();
+
+            match sender.send(EmulatorEvent::Draw(draw_data)) {
+                Err(SendError(_)) => {
+                    drop(emulator);
+                    break;
+                }
+                //Err(_) => (),
+                Ok(_) => (),
+            }
+
+            /*match sender.try_send(EmulatorEvent::Draw(draw_data)) {
+                Err(TrySendError::Disconnected(_)) => {
+                    drop(emulator);
+                    break;
+                }
+                Err(_) => (),
+                Ok(_) => (),
+            }*/
+        }
+
+        emulator.step();
     }
-    drop(emulator);
 }
-*/

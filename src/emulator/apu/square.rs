@@ -41,10 +41,10 @@ impl Square {
 
     fn duty_phase(&self) -> bool {
         let duty = match self.duty {
-            0 => 0x1,
-            1 => 0x3,
-            2 => 0xF,
-            3 => 0xFC,
+            0 => 0b00000001,
+            1 => 0b00000011,
+            2 => 0b00001111,
+            3 => 0b11111100,
             _ => panic!(),
         };
         (duty >> self.duty_step) & 0x01 != 0
@@ -181,7 +181,9 @@ impl Channel for Square {
         for _ in 0..(t_cycles) {
             self.clock += 1;
             if self.clock >= self.period() {
-                let ampl = if self.duty_phase() {
+                let ampl = if !self.on {
+                    0x00
+                } else if self.duty_phase() {
                     self.envelope.volume as i32
                 } else {
                     (self.envelope.volume as i32) * -1

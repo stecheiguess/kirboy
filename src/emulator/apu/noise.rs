@@ -101,7 +101,9 @@ impl Channel for Noise {
     fn step(&mut self, t_cycles: u32) {
         for _ in 0..(t_cycles) {
             if self.clock >= self.period() {
-                let ampl = if self.lfsr.step() {
+                let ampl = if !self.on {
+                    0x00
+                } else if self.lfsr.step() {
                     self.envelope.volume as i32
                 } else {
                     (self.envelope.volume as i32) * -1
