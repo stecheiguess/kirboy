@@ -1,4 +1,4 @@
-use crate::emulator::mbc::{ ram_banks, rom_banks, MBC };
+use crate::emulator::mbc::{ram_banks, rom_banks, MBC};
 
 pub struct MBC5 {
     rom: Vec<u8>,
@@ -16,7 +16,7 @@ impl MBC5 {
         let rom_banks = rom_banks(data[0x148]);
         let ram_banks = ram_banks(data[0x149]);
 
-        println!("{}", ram_banks);
+        //println!("{}", ram_banks);
         let battery = match data[0x147] {
             0x1b => true,
             0x1e => true,
@@ -25,7 +25,7 @@ impl MBC5 {
 
         Self {
             rom: data,
-            ram: vec![0; ram_banks* 0x2000],
+            ram: vec![0; ram_banks * 0x2000],
             ram_on: false,
             rom_bank: 1,
             ram_bank: 0,
@@ -69,10 +69,8 @@ impl MBC for MBC5 {
 
     fn read_rom(&self, address: u16) -> u8 {
         match address {
-            0x0000..=0x3fff => { self.rom[address as usize] }
-            0x4000..=0x7fff => {
-                self.rom[(0x4000 * self.rom_bank) | ((address & 0x3fff) as usize)]
-            }
+            0x0000..=0x3fff => self.rom[address as usize],
+            0x4000..=0x7fff => self.rom[(0x4000 * self.rom_bank) | ((address & 0x3fff) as usize)],
             _ => panic!("Invalid ROM range"),
         }
     }
@@ -97,6 +95,10 @@ impl MBC for MBC5 {
     }
 
     fn save_ram(&self) -> Option<Vec<u8>> {
-        if self.battery { Some(self.ram.clone()) } else { None }
+        if self.battery {
+            Some(self.ram.clone())
+        } else {
+            None
+        }
     }
 }

@@ -23,7 +23,7 @@ impl MBC3 {
         let rom_banks = rom_banks(data[0x148]);
         let ram_banks = ram_banks(data[0x149]);
 
-        println!("{}", ram_banks);
+        //println!("{}", ram_banks);
         let (has_rtc, battery) = match data[0x147] {
             0x0f => (true, false),
             0x10 => (true, true),

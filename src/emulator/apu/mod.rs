@@ -51,7 +51,7 @@ impl APU {
             0xff10..=0xff14 => self.ch1.read(address),
             0xff16..=0xff19 => self.ch2.read(address),
             0xff1a..=0xff1e => self.ch3.read(address),
-            //0xff1f..=0xff23 => self.ch4.read(address),
+            0xff1f..=0xff23 => self.ch4.read(address),
             0xff24 => ((self.volume_right & 0x7) << 4) | (self.volume_left & 0x7),
             0xff25 => self.panning,
             0xff26 => (self.on as u8) << 7,
@@ -65,7 +65,7 @@ impl APU {
             0xff10..=0xff14 => self.ch1.write(value, address),
             0xff16..=0xff19 => self.ch2.write(value, address),
             0xff1a..=0xff1e => self.ch3.write(value, address),
-            //0xff1f..=0xff23 => self.ch4.write(value, address),
+            0xff1f..=0xff23 => self.ch4.write(value, address),
             0xff24 => {
                 self.volume_left = (value >> 4) & 0x7;
                 self.volume_right = value & 0x7;
@@ -89,7 +89,7 @@ impl APU {
             self.ch1.step(self.clock);
             self.ch2.step(self.clock);
             self.ch3.step(self.clock);
-            //self.ch4.step(self.clock);
+            self.ch4.step(self.clock);
 
             let step = self.sequencer.step();
 
@@ -99,7 +99,7 @@ impl APU {
                     self.ch1.length.step();
                     self.ch2.length.step();
                     self.ch3.length.step();
-                    //self.ch4.length.step();
+                    self.ch4.length.step();
                 }
 
                 2 | 6 => {
@@ -108,14 +108,14 @@ impl APU {
                     self.ch1.length.step();
                     self.ch2.length.step();
                     self.ch3.length.step();
-                    //self.ch4.length.step();
+                    self.ch4.length.step();
                 }
 
                 7 => {
                     // volume envelope step
                     self.ch1.envelope.step();
                     self.ch2.envelope.step();
-                    //self.ch4.envelope.step();
+                    self.ch4.envelope.step();
                 }
                 _ => (),
             }
@@ -123,12 +123,12 @@ impl APU {
             self.ch1.blip.end_frame(self.clock);
             self.ch2.blip.end_frame(self.clock);
             self.ch3.blip.end_frame(self.clock);
-            //self.ch4.blip.end_frame(self.clock);
+            self.ch4.blip.end_frame(self.clock);
 
             self.ch1.from = self.ch1.from.wrapping_sub(self.clock);
             self.ch2.from = self.ch2.from.wrapping_sub(self.clock);
             self.ch3.from = self.ch3.from.wrapping_sub(self.clock);
-            //self.ch4.from = self.ch4.from.wrapping_sub(self.clock);
+            self.ch4.from = self.ch4.from.wrapping_sub(self.clock);
 
             self.mix();
             self.clock = 0;
@@ -152,10 +152,10 @@ impl APU {
         let sc1 = self.ch1.blip.samples_avail();
         let sc2 = self.ch2.blip.samples_avail();
         let sc3 = self.ch3.blip.samples_avail();
-        //let sc4 = self.ch4.blip.samples_avail();
+        let sc4 = self.ch4.blip.samples_avail();
         assert_eq!(sc1, sc2);
         assert_eq!(sc2, sc3);
-        // assert_eq!(sc3, sc4);
+        assert_eq!(sc3, sc4);
 
         let sample_count = sc1 as usize;
 
@@ -201,7 +201,7 @@ impl APU {
                 }
             }
 
-            /*let count4 = self.ch4.blip.read_samples(buf, false);
+            let count4 = self.ch4.blip.read_samples(buf, false);
             for (i, v) in buf[..count4].iter().enumerate() {
                 if self.panning & 0x80 == 0x80 {
                     buf_l[i] += *v as f32 * left_vol;
@@ -209,11 +209,11 @@ impl APU {
                 if self.panning & 0x08 == 0x08 {
                     buf_r[i] += *v as f32 * right_vol;
                 }
-            }*/
+            }
 
             debug_assert!(count1 == count2);
             debug_assert!(count1 == count3);
-            //debug_assert!(count1 == count4);
+            debug_assert!(count1 == count4);
 
             self.play(&buf_l[..count1], &buf_r[..count1]);
 

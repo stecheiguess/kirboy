@@ -1,4 +1,4 @@
-use crate::emulator::mbc::{ ram_banks, rom_banks, MBC };
+use crate::emulator::mbc::{ram_banks, rom_banks, MBC};
 
 pub struct MBC1 {
     rom: Vec<u8>,
@@ -17,7 +17,7 @@ impl MBC1 {
         let rom_banks = rom_banks(data[0x148]);
         let ram_banks = ram_banks(data[0x149]);
 
-        println!("{}", ram_banks);
+        //println!("{}", ram_banks);
         let battery = match data[0x147] {
             0x03 => true,
             _ => false,
@@ -25,7 +25,7 @@ impl MBC1 {
 
         Self {
             rom: data,
-            ram: vec![0; ram_banks* 0x2000],
+            ram: vec![0; ram_banks * 0x2000],
             ram_on: false,
             rom_bank: 1,
             ram_bank: 0,
@@ -41,7 +41,9 @@ impl MBC1 {
             0..=32 => 0,
             64 => (self.ram_bank & 0x1) << 5,
             128 => self.ram_bank << 5,
-            _ => { panic!("invalid zero bank") }
+            _ => {
+                panic!("invalid zero bank")
+            }
         }
     }
 
@@ -50,7 +52,9 @@ impl MBC1 {
             0..=32 => self.rom_bank,
             64 => (self.rom_bank & 0x1f) | ((self.ram_bank & 0x1) << 5),
             128 => (self.rom_bank & 0x1f) | ((self.ram_bank & 0x3) << 5),
-            _ => { panic!("invalid high bank") }
+            _ => {
+                panic!("invalid high bank")
+            }
         }
     }
 }
@@ -67,7 +71,7 @@ impl MBC for MBC1 {
             (address & 0x1fff) as usize
         };
 
-        println!("{}", ram_address);
+        //println!("{}", ram_address);
         self.ram[ram_address]
     }
     fn read_rom(&self, address: u16) -> u8 {
@@ -79,11 +83,11 @@ impl MBC for MBC1 {
                     self.rom[address as usize]
                 }
             }
-            0x4000..=0x7fff => {
-                self.rom[0x4000 * self.high_bank() + ((address as usize) & 0x3fff)]
-            }
+            0x4000..=0x7fff => self.rom[0x4000 * self.high_bank() + ((address as usize) & 0x3fff)],
 
-            _ => { panic!("invalid read rom range") }
+            _ => {
+                panic!("invalid read rom range")
+            }
         }
     }
     fn write_ram(&mut self, value: u8, address: u16) {
@@ -132,7 +136,9 @@ impl MBC for MBC1 {
                     self.rom_bank = match self.rom_banks {
                         64 => (self.rom_bank & 0x1f) | (((value as usize) & 0x1) << 5),
                         128 => (self.rom_bank & 0x1f) | (((value as usize) & 0x3) << 5),
-                        _ => { panic!("cannot set rom bank") }
+                        _ => {
+                            panic!("cannot set rom bank")
+                        }
                     };
                 }
             }
@@ -142,7 +148,6 @@ impl MBC for MBC1 {
             }
 
             // mode switch {}
-
             _ => {}
         }
     }
@@ -154,6 +159,10 @@ impl MBC for MBC1 {
     }
 
     fn save_ram(&self) -> Option<Vec<u8>> {
-        if self.battery { Some(self.ram.clone()) } else { None }
+        if self.battery {
+            Some(self.ram.clone())
+        } else {
+            None
+        }
     }
 }

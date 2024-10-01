@@ -181,7 +181,11 @@ impl Channel for Square {
         for _ in 0..(t_cycles) {
             self.clock += 1;
             if self.clock >= self.period() {
-                let ampl = if self.duty_phase() { 1 } else { -1 };
+                let ampl = if self.duty_phase() {
+                    self.envelope.volume as i32
+                } else {
+                    (self.envelope.volume as i32) * -1
+                };
 
                 self.from = self.from.wrapping_add(self.clock);
 

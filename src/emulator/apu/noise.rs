@@ -12,6 +12,7 @@ pub struct Noise {
     clock: u32,
     pub from: u32,
     pub blip: BlipBuf,
+    ampl: i32,
 }
 
 impl Noise {
@@ -26,6 +27,7 @@ impl Noise {
             clock: 0,
             from: 0,
             blip,
+            ampl: 0,
         }
     }
 
@@ -51,9 +53,11 @@ impl Noise {
 impl Channel for Noise {
     fn read(&self, address: u16) -> u8 {
         match address {
-            0xff20 => 0,
+            0xff20 => 0xff,
             0xff21 => self.envelope.read(),
-            _ => panic!("Invalid read for Noise"),
+            //0xff22 =>
+            0xff23 => 0x80 | if self.length.on { 0x40 } else { 0 } | 0x3f,
+            _ => (0xff), //panic!("Invalid read for Noise"),
         }
     }
 
@@ -86,7 +90,7 @@ impl Channel for Noise {
                 }
             }
 
-            _ => panic!("Invalid write for Noise"),
+            _ => (), //panic!("Invalid write for Noise"),
         }
     }
 
@@ -97,6 +101,18 @@ impl Channel for Noise {
     fn step(&mut self, t_cycles: u32) {
         for _ in 0..(t_cycles) {
             if self.clock >= self.period() {
+                let ampl = if self.lfsr.step() {
+                    self.envelope.volume as i32
+                } else {
+                    (self.envelope.volume as i32) * -1
+                };
+
+                self.from = self.from.wrapping_add(self.clock);
+
+                let d = ampl - self.ampl;
+                self.ampl = ampl;
+                self.blip.add_delta(self.from, d);
+
                 self.clock = 0;
             }
         }

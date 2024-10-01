@@ -36,7 +36,7 @@ pub trait MBC: Send {
 
 pub fn new(data: Vec<u8>) -> Box<dyn MBC> {
     let mbc_type = data[0x147];
-    println!("{:02X}", mbc_type);
+    name(mbc_type);
     match mbc_type {
         0x00 => Box::new(mbc0::MBC0::new(data)),
         0x01..=0x03 => Box::new(mbc1::MBC1::new(data)),
@@ -64,4 +64,40 @@ pub fn ram_banks(value: u8) -> usize {
         5 => 8,
         _ => 0,
     }
+}
+
+pub fn name(mbc_type: u8) {
+    let name = match mbc_type {
+        0x00 => "ROM ONLY",
+        0x01 => "MBC1",
+        0x02 => "MBC1+RAM",
+        0x03 => "MBC1+RAM+BATTERY",
+        0x05 => "MBC2",
+        0x06 => "MBC2+BATTERY",
+        0x08 => "ROM+RAM",
+        0x09 => "ROM+RAM+BATTERY",
+        0x0b => "MMM01",
+        0x0c => "MMM01+RAM",
+        0x0d => "MMM01+RAM+BATTERY",
+        0x0f => "MBC3+TIMER+BATTERY",
+        0x10 => "MBC3+TIMER+RAM+BATTERY",
+        0x11 => "MBC3",
+        0x12 => "MBC3+RAM",
+        0x13 => "MBC3+RAM+BATTERY",
+        0x19 => "MBC5",
+        0x1a => "MBC5+RAM",
+        0x1b => "MBC5+RAM+BATTERY",
+        0x1c => "MBC5+RUMBLE",
+        0x1d => "MBC5+RUMBLE+RAM",
+        0x1e => "MBC5+RUMBLE+RAM+BATTERY",
+        0x20 => "MBC6",
+        0x22 => "MBC7+SENSOR+RUMBLE+RAM+BATTERY",
+        0xfc => "POCKET CAMERA",
+        0xfd => "BANDAI TAMA5",
+        0xfe => "HuC3",
+        0xff => "HuC1+RAM+BATTERY",
+        _ => panic!("MBC does not exist."),
+    };
+
+    println!("{:02X}: {}", mbc_type, name);
 }
