@@ -80,7 +80,7 @@ impl Emulator {
             self.clock -= STEP_CYCLES;
             let now = time::Instant::now();
             let d = now.duration_since(self.now);
-            let s = u64::from(STEP_TIME.saturating_sub(d.as_millis() as u32));
+            let s = STEP_TIME.saturating_sub(d.as_millis() as u32) as u64;
             thread::sleep(time::Duration::from_millis(s));
             self.now = self
                 .now

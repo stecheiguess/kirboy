@@ -123,7 +123,7 @@ fn main() -> Result<(), Error> {
     let mut player = new_emulator(&file.unwrap(), &window, &config_path, &input_sender);
 
     // Start the emulator in a separate thread
-    let emulator_thread = thread::spawn(move || {
+    thread::spawn(move || {
         // This thread runs the emulator loop
         if let Ok(EmulatorEvent::New(emulator)) = input_receiver.recv() {
             run_emulator(emulator, output_sender, input_receiver);
@@ -195,14 +195,7 @@ fn main() -> Result<(), Error> {
         }),
     );
 
-    file_m.append_items(&[
-        //&custom_i_1,
-        //&window_m,
-        //&PredefinedMenuItem::separator(),
-        //&check_custom_i_1,
-        //&check_custom_i_2,
-        &open, &config,
-    ]);
+    file_m.append_items(&[&open, &config]);
 
     window_m.append_items(&[
         &PredefinedMenuItem::minimize(None),
@@ -210,8 +203,6 @@ fn main() -> Result<(), Error> {
         &PredefinedMenuItem::close_window(Some("Close")),
         &PredefinedMenuItem::fullscreen(None),
         &PredefinedMenuItem::bring_all_to_front(None),
-        //&check_custom_i_3,
-        //&custom_i_1,
     ]);
 
     #[cfg(target_os = "windows")]
@@ -232,13 +223,7 @@ fn main() -> Result<(), Error> {
 
     let menu_channel = MenuEvent::receiver();
 
-    //let mut now = Instant::now();
-    let ticks = (4194304f64 / 1000.0 * 16.0).round() as u32;
-    let mut clock = 0;
-
     player.stream.play().unwrap();
-
-    //thread::spawn(move || run_emulator(emulator, output_sender, input_receiver));
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
@@ -331,8 +316,6 @@ fn main() -> Result<(), Error> {
             println!("{event:?}");
         }
     });
-
-    emulator_thread.join().unwrap();
 }
 
 fn log_error<E: std::error::Error + 'static>(method_name: &str, err: E) {

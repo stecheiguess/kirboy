@@ -181,6 +181,7 @@ impl Channel for Square {
         for _ in 0..(t_cycles) {
             self.clock += 1;
             if self.clock >= self.period() {
+                self.on &= self.length.active();
                 let ampl = if !self.on {
                     0x00
                 } else if self.duty_phase() {

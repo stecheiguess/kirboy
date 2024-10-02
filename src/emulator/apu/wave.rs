@@ -120,6 +120,7 @@ impl Channel for Wave {
         for _ in 0..(t_cycles) {
             self.clock += 1;
             if self.clock >= self.period() {
+                self.on &= self.length.active();
                 let sample = if self.wave_index & 0x1 == 0 {
                     self.wave_ram[self.wave_index >> 1] & 0xf
                 } else {

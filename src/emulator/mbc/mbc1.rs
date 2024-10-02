@@ -120,7 +120,7 @@ impl MBC for MBC1 {
                 if value == 0 {
                     self.rom_bank = 1;
                 } else {
-                    let mask = ((self.rom_banks << 1) - 1) & 0x1f;
+                    let mask = (self.rom_banks - 1) & 0x1f;
                     self.rom_bank = mask & (value as usize);
                 }
             }

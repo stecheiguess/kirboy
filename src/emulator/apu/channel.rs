@@ -98,7 +98,7 @@ impl Length {
 
     pub fn trigger(&mut self) {
         if self.clock == 0 {
-            self.clock == self.max;
+            self.clock = self.max;
         }
     }
 }
