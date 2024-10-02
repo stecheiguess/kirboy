@@ -420,23 +420,14 @@ fn run_emulator(
         if emulator.updated() {
             let draw_data = emulator.draw();
 
-            match sender.send(EmulatorEvent::Draw(draw_data)) {
-                Err(SendError(_)) => {
-                    drop(emulator);
-                    break;
-                }
-                //Err(_) => (),
-                Ok(_) => (),
-            }
-
-            /*match sender.try_send(EmulatorEvent::Draw(draw_data)) {
+            match sender.try_send(EmulatorEvent::Draw(draw_data)) {
                 Err(TrySendError::Disconnected(_)) => {
                     drop(emulator);
                     break;
                 }
                 Err(_) => (),
                 Ok(_) => (),
-            }*/
+            }
         }
 
         emulator.step();

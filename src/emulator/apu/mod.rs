@@ -194,10 +194,10 @@ impl APU {
             let count3 = self.ch3.blip.read_samples(buf, false);
             for (i, v) in buf[..count3].iter().enumerate() {
                 if self.panning & 0x40 == 0x40 {
-                    buf_l[i] += ((*v as f32) / 4.0) * left_vol;
+                    buf_l[i] += *v as f32 * left_vol;
                 }
                 if self.panning & 0x04 == 0x04 {
-                    buf_r[i] += ((*v as f32) / 4.0) * right_vol;
+                    buf_r[i] += *v as f32 * right_vol;
                 }
             }
 

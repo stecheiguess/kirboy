@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use std::{
     fs::{self, File},
     io::Read,
     path::PathBuf,
 };
+use std::{thread, time};
 
 use cpu::CPU;
 use joypad::Input;
@@ -32,6 +32,8 @@ pub struct Emulator {
     save: PathBuf,
     key_table: HashMap<Key<'static>, Input>,
     color: Color,
+    clock: u32,
+    now: Instant,
 }
 
 impl Emulator {
@@ -63,7 +65,8 @@ impl Emulator {
             save,
             key_table: conf.get_table(),
             color: conf.get_color(),
-            //controls: conf.controls
+            clock: 0,
+            now: Instant::now(), //controls: conf.controls
         })
     }
 
@@ -72,8 +75,27 @@ impl Emulator {
     }
 
     pub fn step(&mut self) -> u8 {
-        //thread::sleep(Duration::from_nanos(200));
-        self.cpu.step()
+        // makes the emulator run at proper speed
+        if self.clock > STEP_CYCLES {
+            self.clock -= STEP_CYCLES;
+            let now = time::Instant::now();
+            let d = now.duration_since(self.now);
+            let s = u64::from(STEP_TIME.saturating_sub(d.as_millis() as u32));
+            thread::sleep(time::Duration::from_millis(s));
+            self.now = self
+                .now
+                .checked_add(time::Duration::from_millis(u64::from(STEP_TIME)))
+                .unwrap();
+
+            // If now is after the just updated target frame time, reset to
+            // avoid drift.
+            if now.checked_duration_since(self.now).is_some() {
+                self.now = now;
+            }
+        }
+        let cycles = self.cpu.step() * 4;
+        self.clock += cycles as u32;
+        cycles
     }
 
     pub fn updated(&mut self) -> bool {
