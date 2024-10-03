@@ -6,3 +6,5 @@
 /rustfmt.toml
 
 /gameboy-doctor
+
+/src/bin
