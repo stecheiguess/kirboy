@@ -1,6 +1,6 @@
 use blip_buf::BlipBuf;
 
-use super::channel::{Channel, Envelope, Length};
+use super::channel::{Channel, Length};
 
 pub struct Wave {
     pub length: Length,
@@ -51,7 +51,7 @@ impl Channel for Wave {
 
             0xff30..=0xff3f => {
                 if !self.on {
-                    self.wave_ram[(address as usize & 0xF)]
+                    self.wave_ram[address as usize & 0xF]
                 } else {
                     0xFF
                 }
@@ -87,7 +87,7 @@ impl Channel for Wave {
             0xff1e => {
                 self.frequency = (self.frequency & 0xff) | ((value as u16 & 0x07) << 8);
 
-                self.length.on = (value & 0x40 == 0x40);
+                self.length.on = value & 0x40 == 0x40;
 
                 self.on &= self.length.active();
 
@@ -101,7 +101,7 @@ impl Channel for Wave {
 
             0xff30..=0xff3f => {
                 if !self.on {
-                    self.wave_ram[(address as usize & 0xF)] = value;
+                    self.wave_ram[address as usize & 0xF] = value;
                 }
             }
             _ => panic!("Invalid write for Wave"),

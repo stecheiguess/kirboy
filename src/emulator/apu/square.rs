@@ -149,7 +149,7 @@ impl Channel for Square {
             0xff14 | 0xff19 => {
                 self.frequency = (self.frequency & 0xff) | ((value as u16 & 0x07) << 8);
 
-                self.length.on = (value & 0x40 == 0x40);
+                self.length.on = value & 0x40 == 0x40;
 
                 self.on &= self.length.active();
 

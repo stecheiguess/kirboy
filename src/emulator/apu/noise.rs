@@ -57,7 +57,7 @@ impl Channel for Noise {
             0xff21 => self.envelope.read(),
             //0xff22 =>
             0xff23 => 0x80 | if self.length.on { 0x40 } else { 0 } | 0x3f,
-            _ => (0xff), //panic!("Invalid read for Noise"),
+            _ => 0xff, //panic!("Invalid read for Noise"),
         }
     }
 
@@ -82,7 +82,7 @@ impl Channel for Noise {
             }
 
             0xff23 => {
-                self.length.on = (value & 0x40 == 0x40);
+                self.length.on = value & 0x40 == 0x40;
 
                 if value & 0x80 == 0x80 {
                     self.on = true;

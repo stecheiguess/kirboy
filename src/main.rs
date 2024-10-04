@@ -2,19 +2,18 @@
 //#![forbid(unsafe_code)]
 
 use config::Config;
-use dirs::{config_local_dir, desktop_dir, download_dir};
-use emulator::{joypad::Input, Emulator};
+use dirs::{config_local_dir, download_dir};
+use emulator::Emulator;
 use error_iter::ErrorIter as _;
 use log::error;
 use pixels::{Error, Pixels, SurfaceTexture};
 use player::Player;
-use std::path::{Path, PathBuf};
-use std::sync::mpsc::{channel, Receiver, SendError, Sender, SyncSender, TrySendError};
+use std::path::PathBuf;
+use std::sync::mpsc::{Receiver, SyncSender, TrySendError};
 use std::sync::mpsc::{sync_channel, TryRecvError};
 use std::thread;
-use std::time::{Duration, Instant};
 use tao::dpi::LogicalSize;
-use tao::event::{ElementState, Event, MouseButton, WindowEvent};
+use tao::event::{ElementState, Event, WindowEvent};
 use tao::event_loop::{ControlFlow, EventLoopBuilder};
 use tao::keyboard::Key;
 use tao::window::{Window, WindowBuilder};
@@ -22,14 +21,11 @@ use tao::window::{Window, WindowBuilder};
 use rfd::FileDialog;
 
 use muda::{
-    accelerator::{Accelerator, Code, Modifiers},
-    dpi::{PhysicalPosition, Position},
-    AboutMetadata, CheckMenuItem, ContextMenu, IconMenuItem, Menu, MenuEvent, MenuItem,
+    accelerator::{Accelerator, Code, Modifiers}, Menu, MenuEvent, MenuItem,
     PredefinedMenuItem, Submenu,
 };
 
-use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::{Data, FromSample, Sample, SampleFormat, SizedSample, Stream, StreamError};
+use cpal::traits::StreamTrait;
 
 mod config;
 mod emulator;
@@ -122,7 +118,7 @@ fn main() -> Result<(), Error> {
     new_emulator(&file.unwrap(), &window, &input_sender);
 
     // Start the emulator in a separate thread
-    let mut conf = Config::load(&config_path);
+    let conf = Config::load(&config_path);
     thread::spawn(move || {
         // This thread runs the emulator loop
         if let Ok(EmulatorEvent::New(new_emulator)) = input_receiver.recv() {
@@ -410,7 +406,7 @@ fn run_emulator(
             let draw_data = {
                 let buffer = emulator.screen();
                 let mut frame = Vec::new();
-                for (&byte) in buffer.iter() {
+                for &byte in buffer.iter() {
                     let mut rgba: [u8; 4] = [0, 0, 0, 0xff];
                     match byte {
                         0 => rgba[..3].copy_from_slice(&config.color.id0), // white

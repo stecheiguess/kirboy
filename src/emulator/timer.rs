@@ -1,4 +1,4 @@
-use core::{ panic, time };
+use core::panic;
 
 pub struct Timer {
     div: u16,

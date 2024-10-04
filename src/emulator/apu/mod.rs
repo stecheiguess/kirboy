@@ -84,7 +84,7 @@ impl APU {
     }
 
     pub fn step(&mut self, m_cycles: u8) {
-        self.clock += (m_cycles as u32 * 4);
+        self.clock += m_cycles as u32 * 4;
         if self.clock >= (CPU_FREQUENCY / 512) {
             self.ch1.step(self.clock);
             self.ch2.step(self.clock);

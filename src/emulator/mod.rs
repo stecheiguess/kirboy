@@ -1,8 +1,7 @@
-use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use std::{
-    fs::{self, File},
+    fs::{self},
     io::Read,
     path::PathBuf,
 };
@@ -10,9 +9,7 @@ use std::{thread, time};
 
 use cpu::CPU;
 use joypad::Input;
-use tao::keyboard::Key;
 
-use crate::config::{Color, Config};
 
 pub mod apu;
 pub mod cpu;

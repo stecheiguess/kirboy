@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::{Data, FromSample, Sample, SampleFormat, SizedSample, Stream, StreamError};
+use cpal::{Sample, Stream};
 
 pub struct Player {
     pub stream: Stream,
