@@ -4,6 +4,7 @@ use super::channel::{Channel, Envelope, Length};
 
 pub struct Noise {
     on: bool,
+    dac: bool,
     pub length: Length,
     pub envelope: Envelope,
     divisor_code: u8,
@@ -19,6 +20,7 @@ impl Noise {
     pub fn new(blip: BlipBuf) -> Self {
         Self {
             on: false,
+            dac: false,
             length: Length::new(64),
             envelope: Envelope::new(),
             divisor_code: 0,
@@ -70,7 +72,12 @@ impl Channel for Noise {
             }
 
             //nrx2
-            0xff21 => self.envelope.write(value),
+            0xff21 => {
+                self.dac = value & 0xf8 != 0;
+                self.on &= self.dac;
+
+                self.envelope.write(value)
+            }
 
             //nrx3
             0xff22 => {
@@ -85,8 +92,14 @@ impl Channel for Noise {
                 self.length.on = value & 0x40 == 0x40;
 
                 if value & 0x80 == 0x80 {
-                    self.on = true;
                     self.length.trigger();
+
+                    self.lfsr.trigger();
+                    self.clock = 0;
+
+                    if self.dac {
+                        self.on = true
+                    }
                 }
             }
 

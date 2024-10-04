@@ -10,7 +10,6 @@ use std::{thread, time};
 use cpu::CPU;
 use joypad::Input;
 
-
 pub mod apu;
 pub mod cpu;
 pub mod gpu;

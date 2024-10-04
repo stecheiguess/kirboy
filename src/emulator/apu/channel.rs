@@ -39,6 +39,7 @@ impl Envelope {
         self.initial_volume = value >> 4;
         self.direction = value & 0x8 == 0x8;
         self.period = value & 0x7;
+        self.volume = self.initial_volume;
     }
 
     pub fn trigger(&mut self) {

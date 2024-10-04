@@ -6,9 +6,7 @@ pub struct MBC0 {
 
 impl MBC0 {
     pub fn new(data: Vec<u8>) -> Self {
-        Self {
-            rom: data,
-        }
+        Self { rom: data }
     }
 }
 

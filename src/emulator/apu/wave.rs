@@ -4,6 +4,7 @@ use super::channel::{Channel, Length};
 
 pub struct Wave {
     pub length: Length,
+    dac: bool,
     clock: u32,
     wave_ram: [u8; 16],
     on: bool,
@@ -19,6 +20,7 @@ impl Wave {
     pub fn new(blip: BlipBuf) -> Self {
         Self {
             length: Length::new(256),
+            dac: false,
             clock: 0,
             wave_ram: [0; 16],
             on: false,
@@ -43,19 +45,13 @@ impl Channel for Wave {
     fn read(&self, address: u16) -> u8 {
         match address {
             // nrx0
-            0xff1a => (self.on as u8) << 7,
+            0xff1a => (self.dac as u8) << 7,
 
             0xff1c => (self.volume & 0x3) << 5,
 
             0xff1e => 0x80 | if self.length.on { 0x40 } else { 0 } | 0x3F,
 
-            0xff30..=0xff3f => {
-                if !self.on {
-                    self.wave_ram[address as usize & 0xF]
-                } else {
-                    0xFF
-                }
-            }
+            0xff30..=0xff3f => self.wave_ram[address as usize & 0xF],
 
             _ => panic!("Invalid read for Wave"),
         }
@@ -65,7 +61,8 @@ impl Channel for Wave {
         match address {
             //nrx0
             0xff1a => {
-                self.on = ((value >> 7) & 0b1) != 0;
+                self.dac = ((value >> 7) & 0b1) != 0;
+                self.on &= self.dac;
             }
 
             //nrx1
@@ -93,16 +90,16 @@ impl Channel for Wave {
 
                 // if set
                 if value & 0x80 == 0x80 {
-                    self.on = true;
+                    if self.dac {
+                        self.on = true;
+                    }
 
                     self.length.trigger();
                 }
             }
 
             0xff30..=0xff3f => {
-                if !self.on {
-                    self.wave_ram[address as usize & 0xF] = value;
-                }
+                self.wave_ram[address as usize & 0xF] = value;
             }
             _ => panic!("Invalid write for Wave"),
         }
@@ -127,8 +124,8 @@ impl Channel for Wave {
                     self.wave_ram[self.wave_index >> 1] >> 4
                 };
 
-                let ampl = if self.on {
-                    (sample >> volume) as i32
+                let ampl = if self.on && self.dac {
+                    ((sample << 2) >> volume) as i32
                 } else {
                     0x00
                 };

@@ -4,6 +4,7 @@ use super::channel::{Channel, Envelope, Length};
 
 pub struct Square {
     on: bool,
+    dac: bool,
     duty: u8,
     frequency: u16,
     clock: u32,
@@ -22,6 +23,7 @@ impl Square {
     pub fn new(blip: BlipBuf, has_sweep: bool) -> Self {
         Self {
             on: false,
+            dac: false,
             duty: 1,
             frequency: 0,
             clock: 2048,
@@ -59,7 +61,7 @@ impl Square {
             self.sweep.frequency + d
         };
 
-        if new_frequency > 2047 {
+        if new_frequency >= 2048 {
             self.on = false
         };
 
@@ -67,25 +69,25 @@ impl Square {
     }
 
     pub fn sweep_step(&mut self) {
-        if self.sweep.clock > 0 {
+        if self.sweep.clock > 1 {
             self.sweep.clock -= 1
-        }
-        if self.sweep.clock == 0 {
+        } else {
             if self.sweep.period > 0 {
-                self.sweep.clock = self.sweep.period
+                self.sweep.clock = self.sweep.period;
+
+                if self.sweep.on {
+                    let new_frequency = self.sweep_calc_frequency();
+
+                    if new_frequency <= 2047 {
+                        if self.sweep.shift != 0 {
+                            self.frequency = new_frequency;
+                            self.sweep.frequency = new_frequency;
+                        }
+                        self.sweep_calc_frequency();
+                    }
+                }
             } else {
                 self.sweep.clock = 8
-            }
-        }
-
-        if self.sweep.on && self.sweep.period > 0 {
-            let new_frequency = self.sweep_calc_frequency();
-
-            if new_frequency <= 2047 && self.sweep.shift > 0 {
-                self.frequency = new_frequency;
-                self.sweep.frequency = new_frequency;
-
-                self.sweep_calc_frequency();
             }
         }
     }
@@ -137,6 +139,7 @@ impl Channel for Square {
 
             // nrx2
             0xff12 | 0xff17 => {
+                self.dac = value & 0xf8 != 0;
                 self.envelope.write(value);
             }
 
@@ -155,7 +158,9 @@ impl Channel for Square {
 
                 // if set
                 if value & 0x80 == 0x80 {
-                    self.on = true;
+                    if self.dac {
+                        self.on = true;
+                    }
 
                     self.length.trigger();
 

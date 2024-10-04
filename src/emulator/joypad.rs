@@ -48,17 +48,15 @@ impl Joypad {
 
     pub fn read(&self) -> u8 {
         if self.direction {
-            0xc0 |
-                ((!self.down as u8) << 3) |
-                ((!self.up as u8) << 2) |
-                ((!self.left as u8) << 1) |
-                (!self.right as u8)
+            0xc0 | ((!self.down as u8) << 3)
+                | ((!self.up as u8) << 2)
+                | ((!self.left as u8) << 1)
+                | (!self.right as u8)
         } else if self.action {
-            0xc0 |
-                ((!self.start as u8) << 3) |
-                ((!self.select as u8) << 2) |
-                ((!self.b as u8) << 1) |
-                (!self.a as u8)
+            0xc0 | ((!self.start as u8) << 3)
+                | ((!self.select as u8) << 2)
+                | ((!self.b as u8) << 1)
+                | (!self.a as u8)
         } else {
             0xc0
         }

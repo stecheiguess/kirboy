@@ -6,13 +6,14 @@ use noise::Noise;
 use square::Square;
 use wave::Wave;
 
+use super::CLOCK_FREQUENCY;
+
 mod channel;
 mod noise;
 mod square;
 mod wave;
 
-pub const CPU_FREQUENCY: u32 = 4_194_304;
-
+const SAMPLE_RATE: u32 = 44100;
 //#[derive(Copy, Clone, Debug)]
 pub struct APU {
     on: bool,
@@ -54,7 +55,14 @@ impl APU {
             0xff1f..=0xff23 => self.ch4.read(address),
             0xff24 => ((self.volume_right & 0x7) << 4) | (self.volume_left & 0x7),
             0xff25 => self.panning,
-            0xff26 => (self.on as u8) << 7,
+            0xff26 => {
+                (self.on as u8) << 7
+                    | 0x70
+                    | (self.ch4.on() as u8) << 3
+                    | (self.ch3.on() as u8) << 2
+                    | (self.ch2.on() as u8) << 1
+                    | (self.ch1.on() as u8)
+            }
             0xff30..=0xff3f => self.ch3.read(address),
             _ => 0xFF,
         }
@@ -84,8 +92,12 @@ impl APU {
     }
 
     pub fn step(&mut self, m_cycles: u8) {
+        if !self.on {
+            return;
+        }
+
         self.clock += m_cycles as u32 * 4;
-        if self.clock >= (CPU_FREQUENCY / 512) {
+        if self.clock >= (CLOCK_FREQUENCY / 512) {
             self.ch1.step(self.clock);
             self.ch2.step(self.clock);
             self.ch3.step(self.clock);
@@ -141,7 +153,7 @@ impl APU {
         for (l, r) in l.iter().zip(r) {
             // Do not fill the buffer with more than 1 second of data
             // This speeds up the resync after the turning on and off the speed limiter
-            if buffer.len() > 44100 {
+            if buffer.len() > SAMPLE_RATE as usize {
                 return;
             }
             buffer.push((*l, *r));
@@ -194,10 +206,10 @@ impl APU {
             let count3 = self.ch3.blip.read_samples(buf, false);
             for (i, v) in buf[..count3].iter().enumerate() {
                 if self.panning & 0x40 == 0x40 {
-                    buf_l[i] += *v as f32 * left_vol;
+                    buf_l[i] += *v as f32 * left_vol / 4.0;
                 }
                 if self.panning & 0x04 == 0x04 {
-                    buf_r[i] += *v as f32 * right_vol;
+                    buf_r[i] += *v as f32 * right_vol / 4.0;
                 }
             }
 
@@ -242,7 +254,7 @@ impl Sequencer {
 }
 
 pub fn create_blipbuf() -> BlipBuf {
-    let mut blipbuf = BlipBuf::new(44100);
-    blipbuf.set_rates(f64::from(CPU_FREQUENCY), f64::from(44100));
+    let mut blipbuf = BlipBuf::new(SAMPLE_RATE);
+    blipbuf.set_rates(f64::from(CLOCK_FREQUENCY), f64::from(SAMPLE_RATE));
     blipbuf
 }

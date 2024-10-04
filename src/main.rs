@@ -2,55 +2,36 @@
 //#![forbid(unsafe_code)]
 
 use config::Config;
+use controller::{new_emulator, reload_config, run_emulator, ControllerEvent};
 use dirs::{config_local_dir, download_dir};
-use emulator::Emulator;
 use error_iter::ErrorIter as _;
 use log::error;
-use pixels::{Error, Pixels, SurfaceTexture};
-use player::Player;
+use pixels::Error;
 use std::path::PathBuf;
-use std::sync::mpsc::{Receiver, SyncSender, TrySendError};
-use std::sync::mpsc::{sync_channel, TryRecvError};
+use std::sync::mpsc::sync_channel;
+use std::sync::mpsc::{Receiver, SyncSender};
 use std::thread;
-use tao::dpi::LogicalSize;
 use tao::event::{ElementState, Event, WindowEvent};
 use tao::event_loop::{ControlFlow, EventLoopBuilder};
-use tao::keyboard::Key;
-use tao::window::{Window, WindowBuilder};
 
 use rfd::FileDialog;
 
 use muda::{
-    accelerator::{Accelerator, Code, Modifiers}, Menu, MenuEvent, MenuItem,
-    PredefinedMenuItem, Submenu,
+    accelerator::{Accelerator, Code, Modifiers},
+    Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu,
 };
 
-use cpal::traits::StreamTrait;
-
 mod config;
+mod controller;
 mod emulator;
 mod player;
 
-#[cfg(target_os = "macos")]
-use tao::platform::macos::WindowBuilderExtMacOS;
 #[cfg(target_os = "linux")]
 use tao::platform::unix::WindowExtUnix;
 #[cfg(target_os = "windows")]
 use tao::platform::windows::{
     EventLoopBuilderExtWindows, WindowBuilderExtWindows, WindowExtWindows,
 };
-
-const WIDTH: u32 = 160;
-const HEIGHT: u32 = 144;
-
-enum EmulatorEvent {
-    KeyUp(Key<'static>),
-    KeyDown(Key<'static>),
-    New(Box<Emulator>),
-    Draw(Vec<u8>),
-    Exit,
-    LoadConfig(Config),
-}
 
 fn main() -> Result<(), Error> {
     env_logger::init();
@@ -83,54 +64,24 @@ fn main() -> Result<(), Error> {
         panic!("No file selected");
     }
 
-    let (output_sender, output_receiver): (SyncSender<EmulatorEvent>, Receiver<EmulatorEvent>) =
+    let (output_sender, output_receiver): (SyncSender<ControllerEvent>, Receiver<ControllerEvent>) =
         sync_channel(1);
-    let (input_sender, input_receiver): (SyncSender<EmulatorEvent>, Receiver<EmulatorEvent>) =
+    let (input_sender, input_receiver): (SyncSender<ControllerEvent>, Receiver<ControllerEvent>) =
         sync_channel(1);
 
     // event loop for window.
     let event_loop = { event_loop_builder.build() };
 
-    let window = {
-        let size = LogicalSize::new((WIDTH * 2) as f64, (HEIGHT * 2) as f64);
-
-        #[cfg(target_os = "macos")]
-        {
-            WindowBuilder::new()
-                .with_inner_size(size)
-                .with_min_inner_size(size)
-                .with_titlebar_transparent(true)
-                .with_fullsize_content_view(true)
-                .build(&event_loop)
-                .unwrap()
-        }
-        #[cfg(target_os = "windows")]
-        {
-            WindowBuilder::new()
-                .with_inner_size(size)
-                .with_min_inner_size(size)
-                //.with_transparent(true)
-                .build(&event_loop)
-                .unwrap()
-        }
-    };
-
-    new_emulator(&file.unwrap(), &window, &input_sender);
+    let (mut window, mut pixels) = new_emulator(&file.unwrap(), &input_sender, &event_loop);
 
     // Start the emulator in a separate thread
     let conf = Config::load(&config_path);
     thread::spawn(move || {
         // This thread runs the emulator loop
-        if let Ok(EmulatorEvent::New(new_emulator)) = input_receiver.recv() {
+        if let Ok(ControllerEvent::New(new_emulator)) = input_receiver.recv() {
             run_emulator(new_emulator, output_sender, input_receiver, conf);
         }
     });
-
-    let mut pixels = {
-        let window_size = window.inner_size();
-        let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
-        Pixels::new(WIDTH, HEIGHT, surface_texture)?
-    };
 
     // MENU
 
@@ -229,7 +180,7 @@ fn main() -> Result<(), Error> {
 
     let menu_channel = MenuEvent::receiver();
 
-    event_loop.run(move |event, _, control_flow| {
+    event_loop.run(move |event, event_loop, control_flow| {
         *control_flow = ControlFlow::Poll;
 
         window.request_redraw();
@@ -237,14 +188,16 @@ fn main() -> Result<(), Error> {
         match event {
             Event::RedrawRequested(_) => {
                 match output_receiver.try_recv() {
-                    Ok(EmulatorEvent::Draw(buffer)) => pixels.frame_mut().copy_from_slice(&buffer),
+                    Ok(ControllerEvent::Draw(buffer)) => {
+                        pixels.frame_mut().copy_from_slice(&buffer)
+                    }
                     _ => (),
                 }
 
                 if let Err(err) = pixels.render() {
                     log_error("pixels.render", err);
 
-                    input_sender.send(EmulatorEvent::Exit).unwrap();
+                    input_sender.send(ControllerEvent::Exit).unwrap();
                     *control_flow = ControlFlow::Exit;
 
                     return;
@@ -255,17 +208,17 @@ fn main() -> Result<(), Error> {
                 WindowEvent::KeyboardInput { event: input, .. } => {
                     match (input.state, input.logical_key) {
                         (ElementState::Pressed, key) => {
-                            input_sender.send(EmulatorEvent::KeyDown(key)).unwrap();
+                            input_sender.send(ControllerEvent::KeyDown(key)).unwrap();
                         }
                         (ElementState::Released, key) => {
-                            input_sender.send(EmulatorEvent::KeyUp(key)).unwrap();
+                            input_sender.send(ControllerEvent::KeyUp(key)).unwrap();
                         }
                         _ => (),
                     }
                 }
 
                 WindowEvent::CloseRequested => {
-                    input_sender.send(EmulatorEvent::Exit).unwrap();
+                    input_sender.send(ControllerEvent::Exit).unwrap();
 
                     *control_flow = ControlFlow::Exit;
                 }
@@ -274,7 +227,7 @@ fn main() -> Result<(), Error> {
                     if let Err(err) = pixels.resize_surface(size.width, size.height) {
                         log_error("pixels.resize_surface", err);
 
-                        input_sender.send(EmulatorEvent::Exit).unwrap();
+                        input_sender.send(ControllerEvent::Exit).unwrap();
 
                         *control_flow = ControlFlow::Exit;
 
@@ -282,7 +235,7 @@ fn main() -> Result<(), Error> {
                     }
                 }
                 WindowEvent::DroppedFile(file) => {
-                    new_emulator(&file, &window, &input_sender);
+                    (window, pixels) = new_emulator(&file, &input_sender, &event_loop);
                     //player.stream.play().unwrap();
                 }
                 _ => (),
@@ -299,13 +252,13 @@ fn main() -> Result<(), Error> {
                 // player.stream.pause().unwrap();
                 let file = file_dialog(None);
                 if file.is_some() {
-                    new_emulator(&file.unwrap(), &window, &input_sender);
+                    (window, pixels) = new_emulator(&file.unwrap(), &input_sender, &event_loop);
                     //player.stream.play().unwrap();
                 }
             } else if event.id == config.id() {
                 opener::open(&config_path).unwrap();
             } else if event.id == quit.id() {
-                input_sender.send(EmulatorEvent::Exit).unwrap();
+                input_sender.send(ControllerEvent::Exit).unwrap();
                 *control_flow = ControlFlow::Exit
             } else if event.id == reload.id() {
                 reload_config(&config_path, &input_sender);
@@ -339,100 +292,4 @@ fn file_dialog(path: Option<PathBuf>) -> Option<PathBuf> {
         .pick_file();
     println!("{:?}", file);
     file
-}
-
-fn new_emulator(file: &PathBuf, window: &Window, sender: &SyncSender<EmulatorEvent>) {
-    let emulator = Emulator::new(file);
-
-    window.set_title(&emulator.title());
-
-    // Send the emulator instance to the event loop
-
-    //sender.send(EmulatorEvent::LoadConfig(config)).unwrap();
-    sender.send(EmulatorEvent::New(emulator)).unwrap();
-
-    //sender.send(EmulatorEvent::LoadConfig()).unwrap();
-}
-
-fn reload_config(path: &PathBuf, sender: &SyncSender<EmulatorEvent>) {
-    sender
-        .send(EmulatorEvent::LoadConfig(Config::load(path)))
-        .unwrap();
-}
-
-fn run_emulator(
-    mut emulator: Box<Emulator>,
-    sender: SyncSender<EmulatorEvent>,
-    receiver: Receiver<EmulatorEvent>,
-    //mut player: Player,
-    mut config: Config,
-) {
-    let mut player = Player::new(emulator.audio_buffer());
-    //player.stream.play().unwrap();
-    let _ = player.stream;
-
-    loop {
-        match receiver.try_recv() {
-            Ok(EmulatorEvent::KeyDown(key)) => {
-                // Handle key down
-                emulator.key_down(config.get_input(key));
-            }
-            Ok(EmulatorEvent::KeyUp(key)) => {
-                // Handle key up
-                emulator.key_up(config.get_input(key));
-            }
-            Ok(EmulatorEvent::New(new_emulator)) => {
-                // Switch to new emulator
-                player.stream.pause().unwrap();
-                emulator = new_emulator;
-                player = Player::new(emulator.audio_buffer());
-                player.stream.play().unwrap();
-            }
-            Ok(EmulatorEvent::LoadConfig(new_config)) => {
-                config = new_config;
-            }
-
-            Ok(EmulatorEvent::Exit) => {
-                // Exits Emulator
-                drop(emulator);
-                break;
-            }
-            Err(TryRecvError::Disconnected) => break,
-            _ => (),
-        }
-
-        // Emulator update and draw logic
-        if emulator.updated() {
-            let draw_data = {
-                let buffer = emulator.screen();
-                let mut frame = Vec::new();
-                for &byte in buffer.iter() {
-                    let mut rgba: [u8; 4] = [0, 0, 0, 0xff];
-                    match byte {
-                        0 => rgba[..3].copy_from_slice(&config.color.id0), // white
-                        1 => rgba[..3].copy_from_slice(&config.color.id1), // light gray
-                        2 => rgba[..3].copy_from_slice(&config.color.id2), // dark gray
-                        3 => rgba[..3].copy_from_slice(&config.color.id3), // black
-
-                        _ => (),
-                    }
-
-                    frame.extend_from_slice(&rgba);
-                    //println!("{i:?}");
-                }
-                frame
-            };
-
-            match sender.try_send(EmulatorEvent::Draw(draw_data)) {
-                Err(TrySendError::Disconnected(_)) => {
-                    drop(emulator);
-                    break;
-                }
-                Err(_) => (),
-                Ok(_) => (),
-            }
-        }
-
-        emulator.step();
-    }
 }

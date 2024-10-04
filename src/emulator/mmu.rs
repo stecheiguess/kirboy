@@ -1,15 +1,10 @@
 use crate::emulator::{apu::APU, gpu::GPU, joypad::Joypad, mbc::MBC, timer::Timer};
 
 pub struct MMU {
-    //gpu: GPU,
-    //ram: [u8; 0x10000],
-    xram: [u8; 0x2000],
     pub gpu: GPU,
     pub joypad: Joypad,
-    wram: [u8; 0x2000],
     pub inte: u8,
     pub intf: u8,
-    hram: [u8; 0x007f],
     ram: [u8; 0x10000],
     pub timer: Timer,
     pub cartridge: Box<dyn MBC>,
@@ -19,14 +14,11 @@ pub struct MMU {
 impl MMU {
     pub fn new(cartridge: Box<dyn MBC>) -> Self {
         Self {
-            xram: [0; 0x2000],
             gpu: GPU::new(),
             joypad: Joypad::new(),
             timer: Timer::new(),
-            wram: [0; 0x2000],
             inte: 0,
             intf: 0,
-            hram: [0; 0x007f],
             ram: [0; 0x10000],
             cartridge,
             apu: APU::new(),
