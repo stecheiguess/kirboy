@@ -85,7 +85,7 @@ impl Config {
 
             Ok(_) => {
                 let config = serde_yml::from_str(&file.unwrap()).expect("invalid config");
-                println!("Config:\n{:?}", config);
+                //println!("Config:\n{:?}", config);
                 config
             }
         }
@@ -102,6 +102,28 @@ impl Config {
         table.insert(to_key(&self.keybinds.Select), Input::Select);
         table.insert(to_key(&self.keybinds.Start), Input::Start);
         table
+    }
+
+    pub fn get_input(&self, key: Key) -> Option<Input> {
+        if key == to_key(&self.keybinds.Up) {
+            Some(Input::Up)
+        } else if key == to_key(&self.keybinds.Down) {
+            Some(Input::Down)
+        } else if key == to_key(&self.keybinds.Left) {
+            Some(Input::Left)
+        } else if key == to_key(&self.keybinds.Right) {
+            Some(Input::Right)
+        } else if key == to_key(&self.keybinds.A) {
+            Some(Input::A)
+        } else if key == to_key(&self.keybinds.B) {
+            Some(Input::B)
+        } else if key == to_key(&self.keybinds.Select) {
+            Some(Input::Select)
+        } else if key == to_key(&self.keybinds.Start) {
+            Some(Input::Start)
+        } else {
+            None
+        }
     }
 
     pub fn get_color(&self) -> Color {

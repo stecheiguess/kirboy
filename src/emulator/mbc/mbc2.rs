@@ -1,4 +1,4 @@
-use crate::emulator::mbc::{ rom_banks, MBC };
+use crate::emulator::mbc::MBC;
 
 pub struct MBC2 {
     rom: Vec<u8>,
@@ -36,10 +36,12 @@ impl MBC for MBC2 {
     }
     fn read_rom(&self, address: u16) -> u8 {
         match address {
-            0x0000..=0x3fff => { self.rom[address as usize] }
-            0x4000..=0x7fff => { self.rom[0x4000 * self.rom_bank + ((address as usize) & 0x3fff)] }
+            0x0000..=0x3fff => self.rom[address as usize],
+            0x4000..=0x7fff => self.rom[0x4000 * self.rom_bank + ((address as usize) & 0x3fff)],
 
-            _ => { panic!("invalid read rom range") }
+            _ => {
+                panic!("invalid read rom range")
+            }
         }
     }
     fn write_ram(&mut self, value: u8, address: u16) {
@@ -66,7 +68,6 @@ impl MBC for MBC2 {
             }
 
             // mode switch {}
-
             _ => {}
         }
     }
@@ -78,6 +79,10 @@ impl MBC for MBC2 {
     }
 
     fn save_ram(&self) -> Option<Vec<u8>> {
-        if self.battery { Some(self.ram.clone()) } else { None }
+        if self.battery {
+            Some(self.ram.clone())
+        } else {
+            None
+        }
     }
 }
