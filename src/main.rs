@@ -2,8 +2,8 @@
 //#![forbid(unsafe_code)]
 
 use config::Config;
-use controller::{new_emulator, reload_config, run_emulator, ControllerEvent};
-use dirs::{config_local_dir, download_dir};
+use controller::{Controller, ControllerEvent};
+use dirs::download_dir;
 use error_iter::ErrorIter as _;
 use log::error;
 use pixels::Error;
@@ -53,10 +53,6 @@ fn main() -> Result<(), Error> {
         });
     }
 
-    let mut config_path = config_local_dir().unwrap();
-    config_path.push("kirboy/config");
-    //println!("{:?}", config_path);
-
     // screen init.
     let file = file_dialog(None);
 
@@ -72,14 +68,14 @@ fn main() -> Result<(), Error> {
     // event loop for window.
     let event_loop = { event_loop_builder.build() };
 
-    let (mut window, mut pixels) = new_emulator(&file.unwrap(), &input_sender, &event_loop);
+    let (mut window, mut pixels) = Controller::new(file.unwrap(), &input_sender, &event_loop);
 
     // Start the emulator in a separate thread
-    let conf = Config::load(&config_path);
+    let conf = Config::load();
     thread::spawn(move || {
         // This thread runs the emulator loop
-        if let Ok(ControllerEvent::New(new_emulator)) = input_receiver.recv() {
-            run_emulator(new_emulator, output_sender, input_receiver, conf);
+        if let Ok(ControllerEvent::New(file)) = input_receiver.recv() {
+            Controller::run(file, output_sender, input_receiver, conf);
         }
     });
 
@@ -235,8 +231,7 @@ fn main() -> Result<(), Error> {
                     }
                 }
                 WindowEvent::DroppedFile(file) => {
-                    (window, pixels) = new_emulator(&file, &input_sender, &event_loop);
-                    //player.stream.play().unwrap();
+                    (window, pixels) = Controller::new(file, &input_sender, &event_loop);
                 }
                 _ => (),
             },
@@ -249,19 +244,17 @@ fn main() -> Result<(), Error> {
 
         if let Ok(event) = menu_channel.try_recv() {
             if event.id == open.id() {
-                // player.stream.pause().unwrap();
                 let file = file_dialog(None);
                 if file.is_some() {
-                    (window, pixels) = new_emulator(&file.unwrap(), &input_sender, &event_loop);
-                    //player.stream.play().unwrap();
+                    (window, pixels) = Controller::new(file.unwrap(), &input_sender, &event_loop);
                 }
             } else if event.id == config.id() {
-                opener::open(&config_path).unwrap();
+                input_sender.send(ControllerEvent::OpenConfig).unwrap();
             } else if event.id == quit.id() {
                 input_sender.send(ControllerEvent::Exit).unwrap();
                 *control_flow = ControlFlow::Exit
             } else if event.id == reload.id() {
-                reload_config(&config_path, &input_sender);
+                input_sender.send(ControllerEvent::LoadConfig).unwrap();
             }
 
             //println!("{event:?}");

@@ -13,7 +13,8 @@ mod noise;
 mod square;
 mod wave;
 
-const SAMPLE_RATE: u32 = 44100;
+const SAMPLE_RATE: u32 = 48000;
+const APU_FREQUENCY: u32 = CLOCK_FREQUENCY / 512;
 //#[derive(Copy, Clone, Debug)]
 pub struct APU {
     on: bool,
@@ -97,7 +98,8 @@ impl APU {
         }
 
         self.clock += m_cycles as u32 * 4;
-        if self.clock >= (CLOCK_FREQUENCY / 512) {
+
+        if self.clock >= (APU_FREQUENCY) {
             self.ch1.step(self.clock);
             self.ch2.step(self.clock);
             self.ch3.step(self.clock);
@@ -153,9 +155,9 @@ impl APU {
         for (l, r) in l.iter().zip(r) {
             // Do not fill the buffer with more than 1 second of data
             // This speeds up the resync after the turning on and off the speed limiter
-            if buffer.len() > SAMPLE_RATE as usize {
+            /*if buffer.len() > SAMPLE_RATE as usize {
                 return;
-            }
+            }*/
             buffer.push((*l, *r));
         }
     }
@@ -257,4 +259,10 @@ pub fn create_blipbuf() -> BlipBuf {
     let mut blipbuf = BlipBuf::new(SAMPLE_RATE);
     blipbuf.set_rates(f64::from(CLOCK_FREQUENCY), f64::from(SAMPLE_RATE));
     blipbuf
+}
+
+pub trait AudioPlayer: Send {
+    fn play(&mut self, left_channel: &[f32], right_channel: &[f32]);
+    fn samples_rate(&self) -> u32;
+    fn underflowed(&self) -> bool;
 }

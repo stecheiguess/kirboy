@@ -1,8 +1,8 @@
+use dirs::config_local_dir;
 use serde::{Deserialize, Serialize};
 use serde_yml;
 use std::{
-    collections::HashMap,
-    fs::{self},
+    fs::{self, File},
     path::{Path, PathBuf},
 };
 use tao::keyboard::Key;
@@ -65,13 +65,15 @@ impl Config {
         yaml
     }
 
-    pub fn load(path: &PathBuf) -> Config {
-        let file = fs::read_to_string(path);
+    pub fn load() -> Config {
+        let mut path = config_local_dir().unwrap();
+        path.push("kirboy/config");
+        let file = fs::read_to_string(&path);
         match file {
             Err(_) => {
                 println!("no file");
                 let new_config = Config::new();
-                let parent_dir = Path::new(path).parent().unwrap();
+                let parent_dir = Path::new(&path).parent().unwrap();
                 if !parent_dir.exists() {
                     fs::create_dir_all(parent_dir).expect("Failed to create directory");
                 }
@@ -90,17 +92,11 @@ impl Config {
         }
     }
 
-    pub fn get_table(&self) -> HashMap<Key<'static>, Input> {
-        let mut table: HashMap<Key, Input> = HashMap::new();
-        table.insert(to_key(&self.keybinds.Up), Input::Up);
-        table.insert(to_key(&self.keybinds.Down), Input::Down);
-        table.insert(to_key(&self.keybinds.Left), Input::Left);
-        table.insert(to_key(&self.keybinds.Right), Input::Right);
-        table.insert(to_key(&self.keybinds.A), Input::A);
-        table.insert(to_key(&self.keybinds.B), Input::B);
-        table.insert(to_key(&self.keybinds.Select), Input::Select);
-        table.insert(to_key(&self.keybinds.Start), Input::Start);
-        table
+    pub fn open() {
+        let mut path = config_local_dir().unwrap();
+        path.push("kirboy/config");
+
+        opener::open(&path).unwrap();
     }
 
     pub fn get_input(&self, key: Key) -> Option<Input> {
@@ -123,10 +119,6 @@ impl Config {
         } else {
             None
         }
-    }
-
-    pub fn get_color(&self) -> Color {
-        self.color
     }
 }
 
