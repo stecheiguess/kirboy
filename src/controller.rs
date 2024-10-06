@@ -6,6 +6,7 @@ use pixels::{Pixels, SurfaceTexture};
 use std::path::PathBuf;
 use std::sync::mpsc::TryRecvError;
 use std::sync::mpsc::{Receiver, SyncSender, TrySendError};
+use std::sync::{Arc, Mutex};
 use tao::dpi::LogicalSize;
 use tao::event_loop::EventLoopWindowTarget;
 use tao::keyboard::Key;
@@ -186,6 +187,11 @@ impl Controller {
             controller.emulator.step();
         }
     }
+}
+
+pub fn run_audio(buffer: Arc<Mutex<Vec<(f32, f32)>>>) {
+    let player = Player::new(buffer);
+    player.play();
 }
 
 /*

@@ -130,6 +130,8 @@ impl Channel for Wave {
                     0x00
                 };
 
+                //let ampl = 0;
+
                 self.from = self.from.wrapping_add(self.clock);
 
                 let d = ampl - self.ampl;

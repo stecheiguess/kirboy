@@ -23,7 +23,7 @@ impl Noise {
             dac: false,
             length: Length::new(64),
             envelope: Envelope::new(),
-            divisor_code: 0,
+            divisor_code: 7,
             shift: 0,
             lfsr: LFSR::new(),
             clock: 0,
@@ -40,13 +40,7 @@ impl Noise {
     fn divisor(&self) -> u32 {
         match self.divisor_code {
             0 => 8,
-            1 => 16,
-            2 => 32,
-            3 => 48,
-            4 => 64,
-            5 => 80,
-            6 => 96,
-            7 => 112,
+            n => (n as u32) * 16,
             _ => panic!("Invalid divisor code"),
         }
     }
@@ -93,9 +87,8 @@ impl Channel for Noise {
 
                 if value & 0x80 == 0x80 {
                     self.length.trigger();
-
+                    self.envelope.trigger();
                     self.lfsr.trigger();
-                    self.clock = 0;
 
                     if self.dac {
                         self.on = true
@@ -113,6 +106,7 @@ impl Channel for Noise {
 
     fn step(&mut self, t_cycles: u32) {
         for _ in 0..(t_cycles) {
+            self.clock += 1;
             if self.clock >= self.period() {
                 self.on &= self.length.active();
                 let ampl = if !self.on {
@@ -122,6 +116,8 @@ impl Channel for Noise {
                 } else {
                     (self.envelope.volume as i32) * -1
                 };
+
+                //let ampl = 0;
 
                 self.from = self.from.wrapping_add(self.clock);
 
@@ -155,7 +151,7 @@ impl LFSR {
     pub fn step(&mut self) -> bool {
         let old = self.lfsr;
         self.lfsr <<= 1;
-        let bit = ((old >> self.shift) ^ (self.lfsr >> (self.shift))) & 0x1;
+        let bit = ((old >> self.shift) ^ (self.lfsr >> self.shift)) & 0x1;
 
         self.lfsr |= bit;
         (old >> self.shift) & 0x0001 != 0
