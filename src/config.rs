@@ -2,8 +2,8 @@ use dirs::config_local_dir;
 use serde::{Deserialize, Serialize};
 use serde_yml;
 use std::{
-    fs::{self, File},
-    path::{Path, PathBuf},
+    fs::{self},
+    path::Path,
 };
 use tao::keyboard::Key;
 

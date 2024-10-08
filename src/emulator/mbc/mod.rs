@@ -36,6 +36,9 @@ pub trait MBC: Send {
 
 pub fn new(data: Vec<u8>) -> Box<dyn MBC> {
     let mbc_type = data[0x147];
+    if data[0x143] == 0xC0 {
+        panic!("This cartridge is only compatible with CGB.")
+    }
     name(mbc_type);
     match mbc_type {
         0x00 => Box::new(mbc0::MBC0::new(data)),
@@ -44,7 +47,7 @@ pub fn new(data: Vec<u8>) -> Box<dyn MBC> {
         0x0f..=0x13 => Box::new(mbc3::MBC3::new(data)),
         0x19..=0x1e => Box::new(mbc5::MBC5::new(data)),
         _ => {
-            panic!("MBC 0x{:02X} not implemented", mbc_type)
+            panic!("MBC 0x{:02X} not implemented.", mbc_type)
         }
     }
 }

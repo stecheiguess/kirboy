@@ -1,18 +1,20 @@
 #![deny(clippy::all)]
 //#![forbid(unsafe_code)]
 
-use config::Config;
 use controller::{Controller, ControllerEvent};
 use dirs::download_dir;
 use error_iter::ErrorIter as _;
 use log::error;
-use pixels::Error;
+use pixels::{Error, Pixels, SurfaceTexture};
 use std::path::PathBuf;
 use std::sync::mpsc::sync_channel;
 use std::sync::mpsc::{Receiver, SyncSender};
 use std::thread;
+use tao::dpi::LogicalSize;
 use tao::event::{ElementState, Event, WindowEvent};
-use tao::event_loop::{ControlFlow, EventLoopBuilder};
+use tao::event_loop::{ControlFlow, EventLoopBuilder, EventLoopWindowTarget};
+use tao::platform::macos::WindowBuilderExtMacOS;
+use tao::window::{Window, WindowBuilder};
 
 use rfd::FileDialog;
 
@@ -32,6 +34,9 @@ use tao::platform::unix::WindowExtUnix;
 use tao::platform::windows::{
     EventLoopBuilderExtWindows, WindowBuilderExtWindows, WindowExtWindows,
 };
+
+const WIDTH: u32 = 160;
+const HEIGHT: u32 = 144;
 
 fn main() -> Result<(), Error> {
     env_logger::init();
@@ -68,14 +73,15 @@ fn main() -> Result<(), Error> {
     // event loop for window.
     let event_loop = { event_loop_builder.build() };
 
-    let (mut window, mut pixels) = Controller::new(file.unwrap(), &input_sender, &event_loop);
+    let (mut window, mut pixels) = reload(file.unwrap(), &input_sender, &event_loop);
 
     // Start the emulator in a separate thread
-    let conf = Config::load();
+
     thread::spawn(move || {
         // This thread runs the emulator loop
         if let Ok(ControllerEvent::New(file)) = input_receiver.recv() {
-            Controller::run(file, output_sender, input_receiver, conf);
+            let mut controller = Controller::new(file);
+            controller.run(output_sender, input_receiver);
         }
     });
 
@@ -103,7 +109,7 @@ fn main() -> Result<(), Error> {
         }),
     );
 
-    let config = MenuItem::with_id(
+    let config_open = MenuItem::with_id(
         "config",
         "Config",
         true,
@@ -114,7 +120,7 @@ fn main() -> Result<(), Error> {
         }),
     );
 
-    let reload = MenuItem::with_id(
+    let config_reload = MenuItem::with_id(
         "reload",
         "Reload Config",
         true,
@@ -146,7 +152,7 @@ fn main() -> Result<(), Error> {
     let file_m = Submenu::new("&File", true);
     let window_m = Submenu::new("&Window", true);
 
-    file_m.append_items(&[&open, &config, &reload]);
+    file_m.append_items(&[&open, &config_open, &config_reload]);
 
     window_m.append_items(&[
         &PredefinedMenuItem::minimize(None),
@@ -193,7 +199,9 @@ fn main() -> Result<(), Error> {
                 if let Err(err) = pixels.render() {
                     log_error("pixels.render", err);
 
-                    input_sender.send(ControllerEvent::Exit).unwrap();
+                    input_sender
+                        .send(ControllerEvent::Exit)
+                        .expect("ControllerEvent Exit cannot be sent");
                     *control_flow = ControlFlow::Exit;
 
                     return;
@@ -204,17 +212,23 @@ fn main() -> Result<(), Error> {
                 WindowEvent::KeyboardInput { event: input, .. } => {
                     match (input.state, input.logical_key) {
                         (ElementState::Pressed, key) => {
-                            input_sender.send(ControllerEvent::KeyDown(key)).unwrap();
+                            input_sender
+                                .send(ControllerEvent::KeyDown(key))
+                                .expect("ControllerEvent KeyDown cannot be sent");
                         }
                         (ElementState::Released, key) => {
-                            input_sender.send(ControllerEvent::KeyUp(key)).unwrap();
+                            input_sender
+                                .send(ControllerEvent::KeyUp(key))
+                                .expect("ControllerEvent KeyUp cannot be sent");
                         }
                         _ => (),
                     }
                 }
 
                 WindowEvent::CloseRequested => {
-                    input_sender.send(ControllerEvent::Exit).unwrap();
+                    input_sender
+                        .send(ControllerEvent::Exit)
+                        .expect("ControllerEvent Exit cannot be sent");
 
                     *control_flow = ControlFlow::Exit;
                 }
@@ -223,7 +237,9 @@ fn main() -> Result<(), Error> {
                     if let Err(err) = pixels.resize_surface(size.width, size.height) {
                         log_error("pixels.resize_surface", err);
 
-                        input_sender.send(ControllerEvent::Exit).unwrap();
+                        input_sender
+                            .send(ControllerEvent::Exit)
+                            .expect("ControllerEvent Exit cannot be sent");
 
                         *control_flow = ControlFlow::Exit;
 
@@ -231,7 +247,7 @@ fn main() -> Result<(), Error> {
                     }
                 }
                 WindowEvent::DroppedFile(file) => {
-                    (window, pixels) = Controller::new(file, &input_sender, &event_loop);
+                    (window, pixels) = reload(file, &input_sender, &event_loop);
                 }
                 _ => (),
             },
@@ -245,20 +261,27 @@ fn main() -> Result<(), Error> {
         if let Ok(event) = menu_channel.try_recv() {
             if event.id == open.id() {
                 let file = file_dialog(None);
-                if file.is_some() {
-                    (window, pixels) = Controller::new(file.unwrap(), &input_sender, &event_loop);
+                match file {
+                    Some(f) => {
+                        (window, pixels) = reload(f, &input_sender, &event_loop);
+                    }
+                    None => (),
                 }
-            } else if event.id == config.id() {
-                input_sender.send(ControllerEvent::OpenConfig).unwrap();
+            } else if event.id == config_open.id() {
+                input_sender
+                    .send(ControllerEvent::OpenConfig)
+                    .expect("ControllerEvent OpenConfig cannot be sent");
             } else if event.id == quit.id() {
-                input_sender.send(ControllerEvent::Exit).unwrap();
+                input_sender
+                    .send(ControllerEvent::Exit)
+                    .expect("ControllerEvent Exit cannot be sent");
                 *control_flow = ControlFlow::Exit
-            } else if event.id == reload.id() {
-                input_sender.send(ControllerEvent::LoadConfig).unwrap();
+            } else if event.id == config_reload.id() {
+                input_sender
+                    .send(ControllerEvent::LoadConfig)
+                    .expect("ControllerEvent LoadConfig cannot be sent");
             }
-
-            //println!("{event:?}");
-        }
+        } //println!("{event:?}");
     });
 }
 
@@ -285,4 +308,55 @@ fn file_dialog(path: Option<PathBuf>) -> Option<PathBuf> {
         .pick_file();
     println!("{:?}", file);
     file
+}
+
+pub fn reload(
+    file: PathBuf,
+    sender: &SyncSender<ControllerEvent>,
+    event_loop: &EventLoopWindowTarget<()>,
+) -> (Window, Pixels) {
+    let window = {
+        let size = LogicalSize::new((WIDTH * 2) as f64, (HEIGHT * 2) as f64);
+
+        #[cfg(target_os = "macos")]
+        {
+            WindowBuilder::new()
+                .with_inner_size(size)
+                .with_min_inner_size(size)
+                .with_titlebar_transparent(true)
+                .with_fullsize_content_view(true)
+                .with_title_hidden(true)
+                //.with_title(&emulator.title())
+                .build(&event_loop)
+                .unwrap()
+        }
+        #[cfg(target_os = "windows")]
+        {
+            WindowBuilder::new()
+                .with_inner_size(size)
+                .with_min_inner_size(size)
+                //.with_transparent(true)
+                //.with_title(&emulator.title())
+                .with_title_hidden(true)
+                .build(&event_loop)
+                .unwrap()
+        }
+    };
+
+    let pixels = {
+        let window_size = window.inner_size();
+        let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
+        Pixels::new(WIDTH, HEIGHT, surface_texture).expect("Pixels object cannot be created")
+    };
+
+    // Send the emulator instance to the event loop
+
+    //sender.send(ControllerEvent::LoadConfig(config)).unwrap();
+    sender
+        .send(ControllerEvent::New(file))
+        .expect("ControllerEvent New cannot be sent");
+
+    (window, pixels)
+
+    //sender.send(ControllerEvent::LoadConfig()).unwrap();
 }

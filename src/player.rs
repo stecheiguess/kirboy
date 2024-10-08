@@ -1,17 +1,16 @@
 use std::sync::{Arc, Mutex};
-use std::thread;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::{BufferSize, FromSample, Sample, SampleRate, Stream, StreamConfig};
+use cpal::{BufferSize, Sample, SampleRate, Stream, StreamConfig};
 
 use crate::emulator::apu::AudioPlayer;
 
-pub struct Player {
+pub struct CpalPlayer {
     pub stream: Stream,
 }
 
-impl Player {
-    pub fn new(audio_buffer: Arc<Mutex<Vec<(f32, f32)>>>) -> Self {
+impl CpalPlayer {
+    pub fn new(audio_buffer: Arc<Mutex<Vec<(f32, f32)>>>) -> Box<dyn Player> {
         let host = cpal::default_host();
         let device = host
             .default_output_device()
@@ -39,7 +38,7 @@ impl Player {
             buffer_size: BufferSize::Default, // Experiment with larger values like 4096 or 8192
         };
 
-        println!("{:?}", config);
+        // println!("{:?}", config);
 
         let err_fn = |err| eprintln!("an error occurred on stream: {}", err);
 
@@ -97,15 +96,17 @@ impl Player {
             _ => panic!("unreachable"),
         };
 
-        Self { stream }
+        Box::new(Self { stream })
     }
+}
 
-    pub fn play(&self) {
+impl Player for CpalPlayer {
+    fn play(&self) {
         self.stream.play().unwrap();
     }
 }
 
-pub struct CpalPlayer {
+/*pub struct CpalPlayer {
     buffer: Arc<Mutex<Vec<(f32, f32)>>>,
     sample_rate: u32,
 }
@@ -269,4 +270,8 @@ impl AudioPlayer for CpalPlayer {
     fn underflowed(&self) -> bool {
         (*self.buffer.lock().unwrap()).len() == 0
     }
+}*/
+
+pub trait Player {
+    fn play(&self) {}
 }

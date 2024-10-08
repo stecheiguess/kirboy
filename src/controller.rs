@@ -1,28 +1,18 @@
 use crate::config::Config;
-use crate::emulator::{self, Emulator};
+use crate::emulator::{Emulator};
 use crate::player::{CpalPlayer, Player};
 use cpal::traits::StreamTrait;
-use pixels::{Pixels, SurfaceTexture};
 use std::path::PathBuf;
 use std::sync::mpsc::TryRecvError;
 use std::sync::mpsc::{Receiver, SyncSender, TrySendError};
-use std::sync::{Arc, Mutex};
-use tao::dpi::LogicalSize;
-use tao::event_loop::EventLoopWindowTarget;
 use tao::keyboard::Key;
-use tao::window::{Window, WindowBuilder};
 
-#[cfg(target_os = "macos")]
-use tao::platform::macos::WindowBuilderExtMacOS;
 #[cfg(target_os = "linux")]
 use tao::platform::unix::WindowExtUnix;
 #[cfg(target_os = "windows")]
 use tao::platform::windows::{
     EventLoopBuilderExtWindows, WindowBuilderExtWindows, WindowExtWindows,
 };
-
-const WIDTH: u32 = 160;
-const HEIGHT: u32 = 144;
 
 pub enum ControllerEvent {
     KeyUp(Key<'static>),
@@ -36,12 +26,12 @@ pub enum ControllerEvent {
 
 pub struct Controller {
     emulator: Box<Emulator>,
-    player: Player,
+    player: Box<dyn Player>,
     config: Config,
 }
 
 impl Controller {
-    pub fn new(
+    /*pub fn new(
         file: PathBuf,
         sender: &SyncSender<ControllerEvent>,
         event_loop: &EventLoopWindowTarget<()>,
@@ -89,30 +79,50 @@ impl Controller {
         (window, pixels)
 
         //sender.send(ControllerEvent::LoadConfig()).unwrap();
+    }*/
+
+    pub fn new(file: PathBuf) -> Self {
+        let emulator = Emulator::new(&file);
+        let config = Config::load();
+        let player = CpalPlayer::new(emulator.audio_buffer());
+        player.play();
+
+        Self {
+            emulator,
+            config,
+            player,
+        }
+    }
+
+    pub fn draw(&self) -> Vec<u8> {
+        let buffer = self.emulator.screen();
+        let mut frame = Vec::new();
+        for &byte in buffer.iter() {
+            let mut rgba: [u8; 4] = [0, 0, 0, 0xff];
+            match byte {
+                0 => rgba[..3].copy_from_slice(&self.config.color.id0), // white
+                1 => rgba[..3].copy_from_slice(&self.config.color.id1), // light gray
+                2 => rgba[..3].copy_from_slice(&self.config.color.id2), // dark gray
+                3 => rgba[..3].copy_from_slice(&self.config.color.id3), // black
+
+                _ => (),
+            }
+
+            frame.extend_from_slice(&rgba);
+            //println!("{i:?}");
+        }
+        frame
     }
 
     pub fn run(
-        file: PathBuf,
+        &mut self,
         sender: SyncSender<ControllerEvent>,
         receiver: Receiver<ControllerEvent>,
         //mut player: Player,
-        config: Config,
     ) {
         //let mut emulator;
         //let mut config;
         //let mut player;
-        let (player, stream) = CpalPlayer::new();
-
-        let emulator = Emulator::new(&file);
-
-        let player = Player::new(emulator.audio_buffer());
-        player.play();
-
-        let mut controller = Controller {
-            emulator,
-            config,
-            player,
-        };
 
         //let _ = player.stream;
 
@@ -120,23 +130,23 @@ impl Controller {
             match receiver.try_recv() {
                 Ok(ControllerEvent::KeyDown(key)) => {
                     // Handle key down
-                    controller
-                        .emulator
-                        .key_down(controller.config.get_input(key));
+
+                    self.emulator.key_down(self.config.get_input(key));
                 }
                 Ok(ControllerEvent::KeyUp(key)) => {
                     // Handle key up
-                    controller.emulator.key_up(controller.config.get_input(key));
+
+                    self.emulator.key_up(self.config.get_input(key));
                 }
                 Ok(ControllerEvent::New(path)) => {
                     // Switch to new emulator
-                    let (player, stream) = CpalPlayer::new();
-                    controller.emulator = Emulator::new(&path);
-                    controller.player = Player::new(controller.emulator.audio_buffer());
-                    controller.player.play();
+
+                    self.emulator = Emulator::new(&path);
+                    self.player = CpalPlayer::new(self.emulator.audio_buffer());
+                    self.player.play();
                 }
                 Ok(ControllerEvent::LoadConfig) => {
-                    controller.config = Config::load();
+                    self.config = Config::load();
                 }
 
                 Ok(ControllerEvent::OpenConfig) => {
@@ -153,26 +163,8 @@ impl Controller {
             }
 
             // Emulator update and draw logic
-            if controller.emulator.updated() {
-                let draw_data = {
-                    let buffer = controller.emulator.screen();
-                    let mut frame = Vec::new();
-                    for &byte in buffer.iter() {
-                        let mut rgba: [u8; 4] = [0, 0, 0, 0xff];
-                        match byte {
-                            0 => rgba[..3].copy_from_slice(&controller.config.color.id0), // white
-                            1 => rgba[..3].copy_from_slice(&controller.config.color.id1), // light gray
-                            2 => rgba[..3].copy_from_slice(&controller.config.color.id2), // dark gray
-                            3 => rgba[..3].copy_from_slice(&controller.config.color.id3), // black
-
-                            _ => (),
-                        }
-
-                        frame.extend_from_slice(&rgba);
-                        //println!("{i:?}");
-                    }
-                    frame
-                };
+            if self.emulator.updated() {
+                let draw_data = self.draw();
 
                 match sender.try_send(ControllerEvent::Draw(draw_data)) {
                     Err(TrySendError::Disconnected(_)) => {
@@ -184,14 +176,9 @@ impl Controller {
                 }
             }
 
-            controller.emulator.step();
+            self.emulator.step();
         }
     }
-}
-
-pub fn run_audio(buffer: Arc<Mutex<Vec<(f32, f32)>>>) {
-    let player = Player::new(buffer);
-    player.play();
 }
 
 /*

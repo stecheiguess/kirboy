@@ -28,6 +28,7 @@ pub struct Emulator {
     save: PathBuf,
     clock: u32,
     now: Instant,
+    speed: u32,
 }
 
 impl Emulator {
@@ -59,6 +60,7 @@ impl Emulator {
             save,
             clock: 0,
             now: Instant::now(), //controls: conf.controls
+            speed: 1,
         })
     }
 
@@ -68,8 +70,8 @@ impl Emulator {
 
     pub fn step(&mut self) -> u8 {
         // makes the emulator run at proper speed
-        if self.clock > STEP_CYCLES {
-            self.clock -= STEP_CYCLES;
+        if self.clock > (STEP_CYCLES * self.speed) {
+            self.clock -= STEP_CYCLES * self.speed;
             let now = time::Instant::now();
             let d = now.duration_since(self.now);
             let s = STEP_TIME.saturating_sub(d.as_millis() as u32) as u64;
