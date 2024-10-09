@@ -7,7 +7,7 @@ use error_iter::ErrorIter as _;
 use log::error;
 use pixels::{Error, Pixels, SurfaceTexture};
 use std::path::PathBuf;
-use std::sync::mpsc::sync_channel;
+use std::sync::mpsc::{sync_channel, TrySendError};
 use std::sync::mpsc::{Receiver, SyncSender};
 use std::thread;
 use tao::dpi::LogicalSize;
@@ -73,7 +73,8 @@ fn main() -> Result<(), Error> {
     // event loop for window.
     let event_loop = { event_loop_builder.build() };
 
-    let (mut window, mut pixels) = reload(file.unwrap(), &input_sender, &event_loop);
+    let (mut window, mut pixels) =
+        reload(file.unwrap(), &input_sender, &output_receiver, &event_loop);
 
     // Start the emulator in a separate thread
 
@@ -81,6 +82,7 @@ fn main() -> Result<(), Error> {
         // This thread runs the emulator loop
         if let Ok(ControllerEvent::New(file)) = input_receiver.recv() {
             let mut controller = Controller::new(file);
+            //output_sender.send(ControllerEvent::Title(controller.emulator.title()));
             controller.run(output_sender, input_receiver);
         }
     });
@@ -247,7 +249,7 @@ fn main() -> Result<(), Error> {
                     }
                 }
                 WindowEvent::DroppedFile(file) => {
-                    (window, pixels) = reload(file, &input_sender, &event_loop);
+                    (window, pixels) = reload(file, &input_sender, &output_receiver, &event_loop);
                 }
                 _ => (),
             },
@@ -263,7 +265,7 @@ fn main() -> Result<(), Error> {
                 let file = file_dialog(None);
                 match file {
                     Some(f) => {
-                        (window, pixels) = reload(f, &input_sender, &event_loop);
+                        (window, pixels) = reload(f, &input_sender, &output_receiver, &event_loop);
                     }
                     None => (),
                 }
@@ -313,6 +315,7 @@ fn file_dialog(path: Option<PathBuf>) -> Option<PathBuf> {
 pub fn reload(
     file: PathBuf,
     sender: &SyncSender<ControllerEvent>,
+    receiver: &Receiver<ControllerEvent>,
     event_loop: &EventLoopWindowTarget<()>,
 ) -> (Window, Pixels) {
     let window = {
@@ -326,7 +329,7 @@ pub fn reload(
                 .with_titlebar_transparent(true)
                 .with_fullsize_content_view(true)
                 .with_title_hidden(true)
-                //.with_title(&emulator.title())
+                //.with_title(title)
                 .build(&event_loop)
                 .unwrap()
         }
@@ -352,6 +355,7 @@ pub fn reload(
     // Send the emulator instance to the event loop
 
     //sender.send(ControllerEvent::LoadConfig(config)).unwrap();
+
     sender
         .send(ControllerEvent::New(file))
         .expect("ControllerEvent New cannot be sent");
