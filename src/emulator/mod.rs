@@ -44,8 +44,8 @@ impl Emulator {
             Ok(mut file) => {
                 let mut data = vec![];
                 match file.read_to_end(&mut data) {
-                    Err(..) => panic!("Cannot Read Save File"),
-                    Ok(..) => {
+                    Err(_) => panic!("Cannot Read Save File"),
+                    Ok(_) => {
                         cartridge.load_ram(data);
                     }
                 }

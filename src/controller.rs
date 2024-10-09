@@ -1,18 +1,11 @@
 use crate::config::Config;
-use crate::emulator::{Emulator};
+use crate::emulator::Emulator;
 use crate::player::{CpalPlayer, Player};
 use cpal::traits::StreamTrait;
 use std::path::PathBuf;
 use std::sync::mpsc::TryRecvError;
 use std::sync::mpsc::{Receiver, SyncSender, TrySendError};
 use tao::keyboard::Key;
-
-#[cfg(target_os = "linux")]
-use tao::platform::unix::WindowExtUnix;
-#[cfg(target_os = "windows")]
-use tao::platform::windows::{
-    EventLoopBuilderExtWindows, WindowBuilderExtWindows, WindowExtWindows,
-};
 
 pub enum ControllerEvent {
     KeyUp(Key<'static>),
@@ -118,14 +111,7 @@ impl Controller {
         &mut self,
         sender: SyncSender<ControllerEvent>,
         receiver: Receiver<ControllerEvent>,
-        //mut player: Player,
     ) {
-        //let mut emulator;
-        //let mut config;
-        //let mut player;
-
-        //let _ = player.stream;
-
         loop {
             match receiver.try_recv() {
                 Ok(ControllerEvent::KeyDown(key)) => {
@@ -146,16 +132,20 @@ impl Controller {
                     self.player.play();
                 }
                 Ok(ControllerEvent::LoadConfig) => {
+                    // reload config file
+
                     self.config = Config::load();
                 }
 
                 Ok(ControllerEvent::OpenConfig) => {
+                    // open config file
+
                     Config::open();
                 }
 
                 Ok(ControllerEvent::Exit) => {
                     // Exits Emulator
-                    // drop(emulator);
+
                     break;
                 }
                 Err(TryRecvError::Disconnected) => break,
@@ -168,7 +158,6 @@ impl Controller {
 
                 match sender.try_send(ControllerEvent::Draw(draw_data)) {
                     Err(TrySendError::Disconnected(_)) => {
-                        // drop(emulator);
                         break;
                     }
                     Err(_) => (),
