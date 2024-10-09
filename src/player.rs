@@ -10,7 +10,7 @@ pub struct CpalPlayer {
 }
 
 impl CpalPlayer {
-    pub fn new(audio_buffer: Arc<Mutex<Vec<(f32, f32)>>>) -> Box<dyn Player> {
+    pub fn new(audio_buffer: Arc<Mutex<Vec<(f32, f32)>>>) -> Option<Box<dyn Player>> {
         let host = cpal::default_host();
         let device = host
             .default_output_device()
@@ -43,60 +43,70 @@ impl CpalPlayer {
         let err_fn = |err| eprintln!("an error occurred on stream: {}", err);
 
         let stream = match sample_format {
-            cpal::SampleFormat::F32 => device
-                .build_output_stream(
-                    &config,
-                    move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-                        if let Ok(mut buffer) = audio_buffer.try_lock() {
-                            let len = std::cmp::min(data.len() / 2, buffer.len());
-                            if len == 0 {
-                                return;
+            cpal::SampleFormat::F32 => Some(
+                device
+                    .build_output_stream(
+                        &config,
+                        move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+                            if let Ok(mut buffer) = audio_buffer.try_lock() {
+                                let len = std::cmp::min(data.len() / 2, buffer.len());
+                                if len == 0 {
+                                    return;
+                                }
+                                for (i, (data_l, data_r)) in buffer.drain(..len).enumerate() {
+                                    data[i * 2 + 0] = data_l;
+                                    data[i * 2 + 1] = data_r;
+                                }
+                            } else {
+                                // Play silence if we can't acquire the lock
+                                for sample in data.iter_mut() {
+                                    *sample = 0.0;
+                                }
                             }
-                            for (i, (data_l, data_r)) in buffer.drain(..len).enumerate() {
-                                data[i * 2 + 0] = data_l;
-                                data[i * 2 + 1] = data_r;
-                            }
-                        } else {
-                            // Play silence if we can't acquire the lock
-                            for sample in data.iter_mut() {
-                                *sample = 0.0;
-                            }
-                        }
-                    },
-                    err_fn,
-                    None,
-                )
-                .unwrap(),
+                        },
+                        err_fn,
+                        None,
+                    )
+                    .unwrap(),
+            ),
 
-            cpal::SampleFormat::F64 => device
-                .build_output_stream(
-                    &config,
-                    move |data: &mut [f64], _: &cpal::OutputCallbackInfo| {
-                        if let Ok(mut buffer) = audio_buffer.try_lock() {
-                            let len = std::cmp::min(data.len() / 2, buffer.len());
-                            if len == 0 {
-                                return;
+            cpal::SampleFormat::F64 => Some(
+                device
+                    .build_output_stream(
+                        &config,
+                        move |data: &mut [f64], _: &cpal::OutputCallbackInfo| {
+                            if let Ok(mut buffer) = audio_buffer.try_lock() {
+                                let len = std::cmp::min(data.len() / 2, buffer.len());
+                                if len == 0 {
+                                    return;
+                                }
+                                for (i, (data_l, data_r)) in buffer.drain(..len).enumerate() {
+                                    data[i * 2 + 0] = data_l.to_sample::<f64>();
+                                    data[i * 2 + 1] = data_r.to_sample::<f64>();
+                                }
+                            } else {
+                                // Play silence if we can't acquire the lock
+                                for sample in data.iter_mut() {
+                                    *sample = 0.0;
+                                }
                             }
-                            for (i, (data_l, data_r)) in buffer.drain(..len).enumerate() {
-                                data[i * 2 + 0] = data_l.to_sample::<f64>();
-                                data[i * 2 + 1] = data_r.to_sample::<f64>();
-                            }
-                        } else {
-                            // Play silence if we can't acquire the lock
-                            for sample in data.iter_mut() {
-                                *sample = 0.0;
-                            }
-                        }
-                    },
-                    err_fn,
-                    None,
-                )
-                .unwrap(),
+                        },
+                        err_fn,
+                        None,
+                    )
+                    .unwrap(),
+            ),
 
-            _ => panic!("unreachable, {:?}", sample_format),
+            _ => {
+                println!("unreachable, {:?}", sample_format);
+                None
+            }
         };
 
-        Box::new(Self { stream })
+        match stream {
+            Some(stream) => Some(Box::new(Self { stream })),
+            None => None,
+        }
     }
 }
 

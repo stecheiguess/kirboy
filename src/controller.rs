@@ -20,7 +20,7 @@ pub enum ControllerEvent {
 
 pub struct Controller {
     pub emulator: Box<Emulator>,
-    player: Box<dyn Player>,
+    player: Option<Box<dyn Player>>,
     config: Config,
 }
 
@@ -79,7 +79,10 @@ impl Controller {
         let emulator = Emulator::new(&file);
         let config = Config::load();
         let player = CpalPlayer::new(emulator.audio_buffer());
-        player.play();
+
+        if player.is_some() {
+            player.as_ref().unwrap().play();
+        }
 
         Self {
             emulator,
@@ -130,7 +133,9 @@ impl Controller {
 
                     self.emulator = Emulator::new(&path);
                     self.player = CpalPlayer::new(self.emulator.audio_buffer());
-                    self.player.play();
+                    if self.player.is_some() {
+                        self.player.as_ref().unwrap().play();
+                    }
 
                     /*match sender.try_send(ControllerEvent::Title(self.emulator.title())) {
                         Err(TrySendError::Disconnected(_)) => {
