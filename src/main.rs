@@ -13,7 +13,6 @@ use std::thread;
 use tao::dpi::LogicalSize;
 use tao::event::{ElementState, Event, WindowEvent};
 use tao::event_loop::{ControlFlow, EventLoopBuilder, EventLoopWindowTarget};
-use tao::platform::macos::WindowBuilderExtMacOS;
 use tao::window::{Window, WindowBuilder};
 
 use rfd::FileDialog;
@@ -27,7 +26,8 @@ mod config;
 mod controller;
 mod emulator;
 mod player;
-
+#[cfg(target_os = "macos")]
+use tao::platform::macos::WindowBuilderExtMacOS;
 #[cfg(target_os = "linux")]
 use tao::platform::unix::WindowExtUnix;
 #[cfg(target_os = "windows")]
@@ -340,7 +340,6 @@ pub fn reload(
                 .with_min_inner_size(size)
                 //.with_transparent(true)
                 //.with_title(&emulator.title())
-                .with_title_hidden(true)
                 .build(&event_loop)
                 .unwrap()
         }
