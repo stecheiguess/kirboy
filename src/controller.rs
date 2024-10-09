@@ -15,10 +15,11 @@ pub enum ControllerEvent {
     Exit,
     LoadConfig,
     OpenConfig,
+    Title(String),
 }
 
 pub struct Controller {
-    emulator: Box<Emulator>,
+    pub emulator: Box<Emulator>,
     player: Box<dyn Player>,
     config: Config,
 }
@@ -130,6 +131,14 @@ impl Controller {
                     self.emulator = Emulator::new(&path);
                     self.player = CpalPlayer::new(self.emulator.audio_buffer());
                     self.player.play();
+
+                    /*match sender.try_send(ControllerEvent::Title(self.emulator.title())) {
+                        Err(TrySendError::Disconnected(_)) => {
+                            break;
+                        }
+                        Err(_) => (),
+                        Ok(_) => (),
+                    }*/
                 }
                 Ok(ControllerEvent::LoadConfig) => {
                     // reload config file

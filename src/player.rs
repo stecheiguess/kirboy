@@ -93,7 +93,7 @@ impl CpalPlayer {
                 )
                 .unwrap(),
 
-            _ => panic!("unreachable"),
+            _ => panic!("unreachable, {:?}", sample_format),
         };
 
         Box::new(Self { stream })
