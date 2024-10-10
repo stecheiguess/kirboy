@@ -6,6 +6,8 @@ use noise::Noise;
 use square::Square;
 use wave::Wave;
 
+use crate::player::SAMPLE_RATE;
+
 use super::CLOCK_FREQUENCY;
 
 mod channel;
@@ -13,7 +15,6 @@ mod noise;
 mod square;
 mod wave;
 
-const SAMPLE_RATE: u32 = 48000;
 const APU_FREQUENCY: u32 = CLOCK_FREQUENCY / 512;
 //#[derive(Copy, Clone, Debug)]
 pub struct APU {
@@ -257,7 +258,7 @@ impl Sequencer {
 
 pub fn create_blipbuf() -> BlipBuf {
     let mut blipbuf = BlipBuf::new(SAMPLE_RATE);
-    blipbuf.set_rates(f64::from(CLOCK_FREQUENCY), f64::from(SAMPLE_RATE));
+    blipbuf.set_rates(CLOCK_FREQUENCY as f64, SAMPLE_RATE as f64);
     blipbuf
 }
 

@@ -5,7 +5,6 @@ use std::{
     fs::{self},
     path::Path,
 };
-use tao::keyboard::Key;
 
 use crate::emulator::joypad::Input;
 
@@ -14,6 +13,7 @@ pub struct Config {
     pub color: Color,
     pub save: String,
     pub keybinds: Keybinds,
+    pub audio: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone)]
@@ -39,6 +39,7 @@ pub struct Keybinds {
 impl Config {
     pub fn new() -> Config {
         Config {
+            audio: true,
             color: Color {
                 id0: [0xff, 0xff, 0xff], // white
                 id1: [0xcc, 0xcc, 0xcc], // light gray
@@ -84,11 +85,22 @@ impl Config {
                 new_config
             }
 
-            Ok(_) => {
-                let config = serde_yml::from_str(&file.unwrap()).expect("invalid config");
-                //println!("Config:\n{:?}", config);
-                config
-            }
+            Ok(_) => match serde_yml::from_str(&file.unwrap()) {
+                Ok(config) => config,
+                Err(_) => {
+                    println!("Invalid Config");
+                    let new_config = Config::new();
+                    let parent_dir = Path::new(&path).parent().unwrap();
+                    if !parent_dir.exists() {
+                        fs::create_dir_all(parent_dir).expect("Failed to create directory");
+                    }
+                    fs::write(
+                        &path,
+                        serde_yml::to_string(&new_config).expect("config to string"),
+                    );
+                    new_config
+                }
+            },
         }
     }
 
@@ -99,22 +111,22 @@ impl Config {
         opener::open(&path).unwrap();
     }
 
-    pub fn get_input(&self, key: Key) -> Option<Input> {
-        if key == to_key(&self.keybinds.Up) {
+    pub fn get_input(&self, key: &String) -> Option<Input> {
+        if key == &self.keybinds.Up {
             Some(Input::Up)
-        } else if key == to_key(&self.keybinds.Down) {
+        } else if key == &self.keybinds.Down {
             Some(Input::Down)
-        } else if key == to_key(&self.keybinds.Left) {
+        } else if key == &self.keybinds.Left {
             Some(Input::Left)
-        } else if key == to_key(&self.keybinds.Right) {
+        } else if key == &self.keybinds.Right {
             Some(Input::Right)
-        } else if key == to_key(&self.keybinds.A) {
+        } else if key == &self.keybinds.A {
             Some(Input::A)
-        } else if key == to_key(&self.keybinds.B) {
+        } else if key == &self.keybinds.B {
             Some(Input::B)
-        } else if key == to_key(&self.keybinds.Select) {
+        } else if key == &self.keybinds.Select {
             Some(Input::Select)
-        } else if key == to_key(&self.keybinds.Start) {
+        } else if key == &self.keybinds.Start {
             Some(Input::Start)
         } else {
             None
@@ -122,6 +134,7 @@ impl Config {
     }
 }
 
+/*
 pub fn to_key(key: &String) -> Key<'static> {
     match key.as_str() {
         "enter" => Key::Enter,
@@ -170,4 +183,4 @@ pub fn to_key(key: &String) -> Key<'static> {
         "]" => Key::Character("]".into()),
         _ => Key::Dead(None),
     }
-}
+} */

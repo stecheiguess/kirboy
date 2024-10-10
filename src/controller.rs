@@ -1,15 +1,14 @@
 use crate::config::Config;
 use crate::emulator::Emulator;
 use crate::player::{CpalPlayer, Player};
-use cpal::traits::StreamTrait;
 use std::path::PathBuf;
 use std::sync::mpsc::TryRecvError;
 use std::sync::mpsc::{Receiver, SyncSender, TrySendError};
 use tao::keyboard::Key;
 
 pub enum ControllerEvent {
-    KeyUp(Key<'static>),
-    KeyDown(Key<'static>),
+    KeyUp(String),
+    KeyDown(String),
     New(PathBuf),
     Draw(Vec<u8>),
     Exit,
@@ -19,80 +18,22 @@ pub enum ControllerEvent {
 }
 
 pub struct Controller {
-    pub emulator: Box<Emulator>,
+    pub emulator: Option<Box<Emulator>>,
     player: Option<Box<dyn Player>>,
     config: Config,
 }
 
 impl Controller {
-    /*pub fn new(
-        file: PathBuf,
-        sender: &SyncSender<ControllerEvent>,
-        event_loop: &EventLoopWindowTarget<()>,
-    ) -> (Window, Pixels) {
-        let window = {
-            let size = LogicalSize::new((WIDTH * 2) as f64, (HEIGHT * 2) as f64);
-
-            #[cfg(target_os = "macos")]
-            {
-                WindowBuilder::new()
-                    .with_inner_size(size)
-                    .with_min_inner_size(size)
-                    .with_titlebar_transparent(true)
-                    .with_fullsize_content_view(true)
-                    .with_title_hidden(true)
-                    //.with_title(&emulator.title())
-                    .build(&event_loop)
-                    .unwrap()
-            }
-            #[cfg(target_os = "windows")]
-            {
-                WindowBuilder::new()
-                    .with_inner_size(size)
-                    .with_min_inner_size(size)
-                    //.with_transparent(true)
-                    //.with_title(&emulator.title())
-                    .with_title_hidden(true)
-                    .build(&event_loop)
-                    .unwrap()
-            }
-        };
-
-        let pixels = {
-            let window_size = window.inner_size();
-            let surface_texture =
-                SurfaceTexture::new(window_size.width, window_size.height, &window);
-            Pixels::new(WIDTH, HEIGHT, surface_texture).unwrap()
-        };
-
-        // Send the emulator instance to the event loop
-
-        //sender.send(ControllerEvent::LoadConfig(config)).unwrap();
-        sender.send(ControllerEvent::New(file)).unwrap();
-
-        (window, pixels)
-
-        //sender.send(ControllerEvent::LoadConfig()).unwrap();
-    }*/
-
-    pub fn new(file: PathBuf) -> Self {
-        let emulator = Emulator::new(&file);
-        let config = Config::load();
-        let player = CpalPlayer::new(emulator.audio_buffer());
-
-        if player.is_some() {
-            player.as_ref().unwrap().play();
-        }
-
+    pub fn new() -> Self {
         Self {
-            emulator,
-            config,
-            player,
+            emulator: None,
+            config: Config::load(),
+            player: None,
         }
     }
 
     pub fn draw(&self) -> Vec<u8> {
-        let buffer = self.emulator.screen();
+        let buffer = self.emulator.as_ref().unwrap().screen();
         let mut frame = Vec::new();
         for &byte in buffer.iter() {
             let mut rgba: [u8; 4] = [0, 0, 0, 0xff];
@@ -121,29 +62,42 @@ impl Controller {
                 Ok(ControllerEvent::KeyDown(key)) => {
                     // Handle key down
 
-                    self.emulator.key_down(self.config.get_input(key));
+                    self.emulator
+                        .as_mut()
+                        .unwrap()
+                        .key_down(self.config.get_input(&key));
                 }
                 Ok(ControllerEvent::KeyUp(key)) => {
                     // Handle key up
 
-                    self.emulator.key_up(self.config.get_input(key));
+                    self.emulator
+                        .as_mut()
+                        .unwrap()
+                        .key_up(self.config.get_input(&key));
                 }
                 Ok(ControllerEvent::New(path)) => {
                     // Switch to new emulator
-
+                    self.config = Config::load();
                     self.emulator = Emulator::new(&path);
-                    self.player = CpalPlayer::new(self.emulator.audio_buffer());
+                    self.player = if self.config.audio {
+                        CpalPlayer::new(self.emulator.as_ref().unwrap().audio_buffer())
+                    } else {
+                        None
+                    };
                     if self.player.is_some() {
                         self.player.as_ref().unwrap().play();
                     }
 
-                    /*match sender.try_send(ControllerEvent::Title(self.emulator.title())) {
+                    // set title
+                    match sender.try_send(ControllerEvent::Title(
+                        self.emulator.as_ref().unwrap().title(),
+                    )) {
                         Err(TrySendError::Disconnected(_)) => {
                             break;
                         }
                         Err(_) => (),
                         Ok(_) => (),
-                    }*/
+                    }
                 }
                 Ok(ControllerEvent::LoadConfig) => {
                     // reload config file
@@ -167,7 +121,7 @@ impl Controller {
             }
 
             // Emulator update and draw logic
-            if self.emulator.updated() {
+            if self.emulator.as_mut().unwrap().updated() {
                 let draw_data = self.draw();
 
                 match sender.try_send(ControllerEvent::Draw(draw_data)) {
@@ -179,7 +133,7 @@ impl Controller {
                 }
             }
 
-            self.emulator.step();
+            self.emulator.as_mut().unwrap().step();
         }
     }
 }

@@ -32,7 +32,7 @@ pub struct Emulator {
 }
 
 impl Emulator {
-    pub fn new(rom_path: &PathBuf) -> Box<Emulator> {
+    pub fn new(rom_path: &PathBuf) -> Option<Box<Emulator>> {
         let ram_path = rom_path.with_extension("sav");
         let rom: Vec<u8> = std::fs::read(rom_path).unwrap();
 
@@ -55,13 +55,13 @@ impl Emulator {
 
         let save = ram_path.clone();
 
-        Box::new(Emulator {
+        Some(Box::new(Emulator {
             cpu: CPU::new(cartridge, false),
             save,
             clock: 0,
             now: Instant::now(), //controls: conf.controls
             speed: 1,
-        })
+        }))
     }
 
     pub fn title(&self) -> String {

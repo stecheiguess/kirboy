@@ -5,6 +5,7 @@ use cpal::{BufferSize, Sample, SampleRate, Stream, StreamConfig};
 
 use crate::emulator::apu::AudioPlayer;
 
+pub const SAMPLE_RATE: u32 = 48000;
 pub struct CpalPlayer {
     pub stream: Stream,
 }
@@ -31,14 +32,15 @@ impl CpalPlayer {
         let sample_format = supported_config.sample_format();
 
         let config: StreamConfig = supported_config.into();
+        println!("{:?}", config);
 
         let config = StreamConfig {
             channels: config.channels,
-            sample_rate: SampleRate(48000),
+            sample_rate: SampleRate(SAMPLE_RATE),
             buffer_size: BufferSize::Default, // Experiment with larger values like 4096 or 8192
         };
 
-        // println!("{:?}", config);
+        println!("{:?}", sample_format);
 
         let err_fn = |err| eprintln!("an error occurred on stream: {}", err);
 

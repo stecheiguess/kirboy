@@ -13,6 +13,7 @@ use std::thread;
 use tao::dpi::LogicalSize;
 use tao::event::{ElementState, Event, WindowEvent};
 use tao::event_loop::{ControlFlow, EventLoopBuilder, EventLoopWindowTarget};
+use tao::keyboard::Key;
 use tao::window::{Window, WindowBuilder};
 
 use rfd::FileDialog;
@@ -66,7 +67,7 @@ fn main() -> Result<(), Error> {
     }
 
     let (output_sender, output_receiver): (SyncSender<ControllerEvent>, Receiver<ControllerEvent>) =
-        sync_channel(1);
+        sync_channel(2);
     let (input_sender, input_receiver): (SyncSender<ControllerEvent>, Receiver<ControllerEvent>) =
         sync_channel(1);
 
@@ -78,13 +79,11 @@ fn main() -> Result<(), Error> {
 
     // Start the emulator in a separate thread
 
-    thread::spawn(move || {
+    let emulator_thread = thread::spawn(move || {
         // This thread runs the emulator loop
-        if let Ok(ControllerEvent::New(file)) = input_receiver.recv() {
-            let mut controller = Controller::new(file);
-            //output_sender.send(ControllerEvent::Title(controller.emulator.title()));
-            controller.run(output_sender, input_receiver);
-        }
+        let mut controller = Controller::new();
+        controller.run(output_sender, input_receiver);
+        drop(controller);
     });
 
     // MENU
@@ -195,6 +194,12 @@ fn main() -> Result<(), Error> {
                     Ok(ControllerEvent::Draw(buffer)) => {
                         pixels.frame_mut().copy_from_slice(&buffer)
                     }
+
+                    Ok(ControllerEvent::Title(title)) => {
+                        println!("{}", title);
+                        window.set_title(&title);
+                    }
+
                     _ => (),
                 }
 
@@ -204,7 +209,9 @@ fn main() -> Result<(), Error> {
                     input_sender
                         .send(ControllerEvent::Exit)
                         .expect("ControllerEvent Exit cannot be sent");
-                    *control_flow = ControlFlow::Exit;
+                    while !emulator_thread.is_finished() {
+                        *control_flow = ControlFlow::Exit
+                    }
 
                     return;
                 }
@@ -213,16 +220,18 @@ fn main() -> Result<(), Error> {
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::KeyboardInput { event: input, .. } => {
                     match (input.state, input.logical_key) {
-                        (ElementState::Pressed, key) => {
-                            input_sender
+                        (ElementState::Pressed, key) => match to_text(key) {
+                            Some(key) => input_sender
                                 .send(ControllerEvent::KeyDown(key))
-                                .expect("ControllerEvent KeyDown cannot be sent");
-                        }
-                        (ElementState::Released, key) => {
-                            input_sender
+                                .expect("ControllerEvent KeyDown cannot be sent"),
+                            None => (),
+                        },
+                        (ElementState::Released, key) => match to_text(key) {
+                            Some(key) => input_sender
                                 .send(ControllerEvent::KeyUp(key))
-                                .expect("ControllerEvent KeyUp cannot be sent");
-                        }
+                                .expect("ControllerEvent KeyUp cannot be sent"),
+                            None => (),
+                        },
                         _ => (),
                     }
                 }
@@ -232,7 +241,9 @@ fn main() -> Result<(), Error> {
                         .send(ControllerEvent::Exit)
                         .expect("ControllerEvent Exit cannot be sent");
 
-                    *control_flow = ControlFlow::Exit;
+                    while !emulator_thread.is_finished() {
+                        *control_flow = ControlFlow::Exit
+                    }
                 }
 
                 WindowEvent::Resized(size) => {
@@ -243,7 +254,9 @@ fn main() -> Result<(), Error> {
                             .send(ControllerEvent::Exit)
                             .expect("ControllerEvent Exit cannot be sent");
 
-                        *control_flow = ControlFlow::Exit;
+                        while !emulator_thread.is_finished() {
+                            *control_flow = ControlFlow::Exit
+                        }
 
                         return;
                     }
@@ -277,7 +290,9 @@ fn main() -> Result<(), Error> {
                 input_sender
                     .send(ControllerEvent::Exit)
                     .expect("ControllerEvent Exit cannot be sent");
-                *control_flow = ControlFlow::Exit
+                while !emulator_thread.is_finished() {
+                    *control_flow = ControlFlow::Exit
+                }
             } else if event.id == config_reload.id() {
                 input_sender
                     .send(ControllerEvent::LoadConfig)
@@ -328,7 +343,7 @@ pub fn reload(
                 .with_min_inner_size(size)
                 .with_titlebar_transparent(true)
                 .with_fullsize_content_view(true)
-                .with_title_hidden(true)
+                //.with_title_hidden(true)
                 //.with_title(title)
                 .build(&event_loop)
                 .unwrap()
@@ -362,4 +377,22 @@ pub fn reload(
     (window, pixels)
 
     //sender.send(ControllerEvent::LoadConfig()).unwrap();
+}
+
+pub fn to_text<'a>(key: Key<'a>) -> Option<String> {
+    let text = match key {
+        Key::Character(ch) => Some(ch.into()),
+        Key::Enter => Some("enter".into()),
+        Key::Backspace => Some("backspace".into()),
+        Key::Tab => Some("tab".into()),
+        Key::Space => Some("space".into()),
+        Key::Escape => Some("escape".into()),
+        Key::Shift => Some("shift".into()),
+        Key::ArrowDown => Some("down".into()),
+        Key::ArrowUp => Some("up".into()),
+        Key::ArrowLeft => Some("left".into()),
+        Key::ArrowRight => Some("right".into()),
+        _ => None,
+    };
+    text
 }
