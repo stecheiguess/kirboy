@@ -74,9 +74,40 @@ fn main() -> Result<(), Error> {
     // event loop for window.
     let event_loop = { event_loop_builder.build() };
 
-    let (mut window, mut pixels) =
-        reload(file.unwrap(), &input_sender, &output_receiver, &event_loop);
+    let window = {
+        let size = LogicalSize::new((WIDTH * 2) as f64, (HEIGHT * 2) as f64);
 
+        #[cfg(target_os = "macos")]
+        {
+            WindowBuilder::new()
+                .with_inner_size(size)
+                .with_min_inner_size(size)
+                .with_titlebar_transparent(true)
+                .with_fullsize_content_view(true)
+                //.with_title_hidden(true)
+                //.with_title(title)
+                .build(&event_loop)
+                .unwrap()
+        }
+        #[cfg(target_os = "windows")]
+        {
+            WindowBuilder::new()
+                .with_inner_size(size)
+                .with_min_inner_size(size)
+                //.with_transparent(true)
+                //.with_title(&emulator.title())
+                .build(&event_loop)
+                .unwrap()
+        }
+    };
+
+    let mut pixels = {
+        let window_size = window.inner_size();
+        let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
+        Pixels::new(WIDTH, HEIGHT, surface_texture).expect("Pixels object cannot be created")
+    };
+
+    reload(file.unwrap(), &input_sender, &output_receiver);
     // Start the emulator in a separate thread
 
     let emulator_thread = thread::spawn(move || {
@@ -185,9 +216,7 @@ fn main() -> Result<(), Error> {
 
     event_loop.run(move |event, event_loop, control_flow| {
         *control_flow = ControlFlow::Poll;
-
         window.request_redraw();
-
         match event {
             Event::RedrawRequested(_) => {
                 match output_receiver.try_recv() {
@@ -197,6 +226,7 @@ fn main() -> Result<(), Error> {
 
                     Ok(ControllerEvent::Title(title)) => {
                         println!("{}", title);
+
                         window.set_title(&title);
                     }
 
@@ -262,7 +292,7 @@ fn main() -> Result<(), Error> {
                     }
                 }
                 WindowEvent::DroppedFile(file) => {
-                    (window, pixels) = reload(file, &input_sender, &output_receiver, &event_loop);
+                    reload(file, &input_sender, &output_receiver);
                 }
                 _ => (),
             },
@@ -278,7 +308,7 @@ fn main() -> Result<(), Error> {
                 let file = file_dialog(None);
                 match file {
                     Some(f) => {
-                        (window, pixels) = reload(f, &input_sender, &output_receiver, &event_loop);
+                        reload(f, &input_sender, &output_receiver);
                     }
                     None => (),
                 }
@@ -331,41 +361,7 @@ pub fn reload(
     file: PathBuf,
     sender: &SyncSender<ControllerEvent>,
     receiver: &Receiver<ControllerEvent>,
-    event_loop: &EventLoopWindowTarget<()>,
-) -> (Window, Pixels) {
-    let window = {
-        let size = LogicalSize::new((WIDTH * 2) as f64, (HEIGHT * 2) as f64);
-
-        #[cfg(target_os = "macos")]
-        {
-            WindowBuilder::new()
-                .with_inner_size(size)
-                .with_min_inner_size(size)
-                .with_titlebar_transparent(true)
-                .with_fullsize_content_view(true)
-                //.with_title_hidden(true)
-                //.with_title(title)
-                .build(&event_loop)
-                .unwrap()
-        }
-        #[cfg(target_os = "windows")]
-        {
-            WindowBuilder::new()
-                .with_inner_size(size)
-                .with_min_inner_size(size)
-                //.with_transparent(true)
-                //.with_title(&emulator.title())
-                .build(&event_loop)
-                .unwrap()
-        }
-    };
-
-    let pixels = {
-        let window_size = window.inner_size();
-        let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
-        Pixels::new(WIDTH, HEIGHT, surface_texture).expect("Pixels object cannot be created")
-    };
-
+) {
     // Send the emulator instance to the event loop
 
     //sender.send(ControllerEvent::LoadConfig(config)).unwrap();
@@ -373,8 +369,6 @@ pub fn reload(
     sender
         .send(ControllerEvent::New(file))
         .expect("ControllerEvent New cannot be sent");
-
-    (window, pixels)
 
     //sender.send(ControllerEvent::LoadConfig()).unwrap();
 }
