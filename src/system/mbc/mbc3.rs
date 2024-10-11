@@ -2,6 +2,8 @@ use std::time;
 
 use crate::system::mbc::{ram_banks, rom_banks, MBC};
 
+use super::MBCError;
+
 pub struct MBC3 {
     rom: Vec<u8>,
     ram: Vec<u8>,
@@ -133,11 +135,19 @@ impl MBC for MBC3 {
         }
     }
 
-    fn load_ram(&mut self, data: Vec<u8>) {
+    fn load_ram(&mut self, data: Vec<u8>) -> Result<(), MBCError> {
+        // to account for the extra stored RTC Registers, 8 bytes have to be added.
+        if data.len() != 8 + self.ram.len() {
+            return Err(MBCError::RAMLength);
+        }
+
+        // loads the first 8 bytes as the RTC registers.
         if self.battery {
             self.rtc.load(data[0..8].to_vec());
             self.ram = data[8..].to_vec();
         }
+
+        Ok(())
     }
 
     fn save_ram(&self) -> Option<Vec<u8>> {

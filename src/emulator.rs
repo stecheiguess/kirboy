@@ -13,13 +13,19 @@ use dirs::config_local_dir;
 
 use crate::system::cpu::{CPUState, CPU};
 use crate::system::joypad::Input;
-use crate::system::mbc;
+use crate::system::mbc::{self, MBCError};
 use crate::utils::CircularQueue;
 
 pub const CLOCK_FREQUENCY: u32 = 4_194_304;
 pub const STEP_TIME: u32 = 12;
 pub const STEP_CYCLES: u32 = (STEP_TIME as f64 / (1000_f64 / CLOCK_FREQUENCY as f64)) as u32;
 
+pub enum EmulatorError {
+    InvalidFileExtension,
+    InvalidSave,
+    InvalidType(u8),
+    InvalidCGB,
+}
 pub struct Emulator {
     cpu: CPU,
     save: PathBuf,
@@ -29,29 +35,19 @@ pub struct Emulator {
 }
 
 impl Emulator {
-    pub fn new(rom_path: &PathBuf) -> Result<Box<Emulator>, &str> {
+    pub fn new(rom_path: &PathBuf) -> Result<Box<Emulator>, EmulatorError> {
         if rom_path.extension().unwrap().to_str().unwrap() != "gb" {
-            return Err("file is not compatible with gb.");
+            return Err(EmulatorError::InvalidFileExtension);
         }
         let ram_path = rom_path.with_extension("sav");
         let rom: Vec<u8> = std::fs::read(rom_path).unwrap();
 
-        let mut cartridge = mbc::new(rom);
-
-        // load cartridge
-        match std::fs::File::open(&ram_path) {
-            // only if cart has ram file
-            Ok(mut file) => {
-                let mut data = vec![];
-                match file.read_to_end(&mut data) {
-                    Err(_) => panic!("Cannot Read Save File"),
-                    Ok(_) => {
-                        cartridge.load_ram(data);
-                    }
-                }
-            }
-            Err(..) => {}
-        }
+        let cartridge = match mbc::new(rom) {
+            Ok(c) => c,
+            Err(MBCError::CGB) => return Err(EmulatorError::InvalidCGB),
+            Err(MBCError::MBCType(t)) => return Err(EmulatorError::InvalidType(t)),
+            Err(MBCError::RAMLength) => return Err(EmulatorError::InvalidSave),
+        };
 
         let save = ram_path.clone();
 
@@ -62,6 +58,28 @@ impl Emulator {
             now: Instant::now(),
             state_buffer: CircularQueue::new(500),
         }))
+    }
+
+    pub fn load_save(&mut self, rom_path: &PathBuf) -> Result<(), EmulatorError> {
+        let ram_path = rom_path.with_extension("sav");
+
+        match std::fs::File::open(&ram_path) {
+            // only if cart has ram file
+            Ok(mut file) => {
+                let mut data = vec![];
+                match file.read_to_end(&mut data) {
+                    Err(_) => panic!("Cannot Read Save File"),
+                    Ok(_) => match self.cpu.mmu.cartridge.load_ram(data) {
+                        Ok(_) => Ok(()),
+                        Err(_) => {
+                            println!("HIHIHIHIHIHIH");
+                            return Err(EmulatorError::InvalidSave);
+                        }
+                    },
+                }
+            }
+            Err(..) => Ok(()),
+        }
     }
 
     pub fn title(&self) -> String {

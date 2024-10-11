@@ -1,5 +1,7 @@
 use crate::system::mbc::MBC;
 
+use super::MBCError;
+
 pub struct MBC0 {
     rom: Vec<u8>,
 }
@@ -24,8 +26,8 @@ impl MBC for MBC0 {
         return;
     }
 
-    fn load_ram(&mut self, _data: Vec<u8>) {
-        return;
+    fn load_ram(&mut self, _data: Vec<u8>) -> Result<(), MBCError> {
+        Ok(())
     }
 
     fn save_ram(&self) -> Option<Vec<u8>> {

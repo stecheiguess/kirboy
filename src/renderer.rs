@@ -15,6 +15,8 @@ pub struct Renderer {
     time_buffer: wgpu::Buffer,
     vertex_buffer: wgpu::Buffer,
     cutout_buffer: wgpu::Buffer,
+    // stores the current dimensions of the window, to create the
+    // constants needed to transform the pixels to size properly.
     width: u32,
     height: u32,
     time: f32,

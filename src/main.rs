@@ -1,11 +1,13 @@
 #![deny(clippy::all)]
 //#![forbid(unsafe_code)]
 
-use controller::{Controller, ControllerEvent};
+use controller::{Controller, ControllerRequest, ControllerResponse};
 use dirs::download_dir;
+use emulator::EmulatorError;
 use error_iter::ErrorIter as _;
 use log::error;
 use muda::CheckMenuItem;
+use notify_rust::Notification;
 use pixels::{Error, Pixels, SurfaceTexture};
 use renderer::{Renderer, Shader, SHADER_LIST};
 use std::path::PathBuf;
@@ -67,10 +69,14 @@ fn main() -> Result<(), Error> {
 
     // screen init.
 
-    let (output_sender, output_receiver): (SyncSender<ControllerEvent>, Receiver<ControllerEvent>) =
-        sync_channel(2);
-    let (input_sender, input_receiver): (SyncSender<ControllerEvent>, Receiver<ControllerEvent>) =
-        sync_channel(1);
+    let (output_sender, output_receiver): (
+        SyncSender<ControllerResponse>,
+        Receiver<ControllerResponse>,
+    ) = sync_channel(2);
+    let (input_sender, input_receiver): (
+        SyncSender<ControllerRequest>,
+        Receiver<ControllerRequest>,
+    ) = sync_channel(1);
 
     let emulator_thread = thread::spawn(move || {
         // This thread runs the emulator loop
@@ -245,7 +251,7 @@ fn main() -> Result<(), Error> {
                 window.request_redraw();
             }
             Event::RedrawRequested(_) => match output_receiver.try_recv() {
-                Ok(ControllerEvent::Draw(buffer)) => {
+                Ok(ControllerResponse::Draw(buffer)) => {
                     pixels.frame_mut().copy_from_slice(&buffer);
 
                     let render_result = pixels.render_with(|encoder, render_target, context| {
@@ -264,8 +270,8 @@ fn main() -> Result<(), Error> {
                         log_error("pixels.render", err);
 
                         input_sender
-                            .send(ControllerEvent::Exit)
-                            .expect("ControllerEvent Exit cannot be sent");
+                            .send(ControllerRequest::Exit)
+                            .expect("ControllerRequest Exit cannot be sent");
                         while !emulator_thread.is_finished() {
                             *control_flow = ControlFlow::Exit
                         }
@@ -274,11 +280,13 @@ fn main() -> Result<(), Error> {
                     }
                 }
 
-                Ok(ControllerEvent::Title(title)) => {
+                Ok(ControllerResponse::Title(title)) => {
                     println!("{}", title);
 
                     window.set_title(&title);
                 }
+
+                Ok(ControllerResponse::EmulatorError(e)) => notify(e),
 
                 _ => (),
             },
@@ -292,15 +300,15 @@ fn main() -> Result<(), Error> {
                                 //(pixels, renderer) = new_renderer(&window, x);
                                 //shader += 1;
                                 input_sender
-                                    .send(ControllerEvent::KeyDown(key))
-                                    .expect("ControllerEvent KeyDown cannot be sent")
+                                    .send(ControllerRequest::KeyDown(key))
+                                    .expect("ControllerRequest KeyDown cannot be sent")
                             }
                             None => (),
                         },
                         (ElementState::Released, key) => match to_text(key) {
                             Some(key) => input_sender
-                                .send(ControllerEvent::KeyUp(key))
-                                .expect("ControllerEvent KeyUp cannot be sent"),
+                                .send(ControllerRequest::KeyUp(key))
+                                .expect("ControllerRequest KeyUp cannot be sent"),
                             None => (),
                         },
                         _ => (),
@@ -309,8 +317,8 @@ fn main() -> Result<(), Error> {
 
                 WindowEvent::CloseRequested => {
                     input_sender
-                        .send(ControllerEvent::Exit)
-                        .expect("ControllerEvent Exit cannot be sent");
+                        .send(ControllerRequest::Exit)
+                        .expect("ControllerRequest Exit cannot be sent");
 
                     while !emulator_thread.is_finished() {
                         *control_flow = ControlFlow::Exit
@@ -322,8 +330,8 @@ fn main() -> Result<(), Error> {
                         log_error("pixels.resize_surface", err);
 
                         input_sender
-                            .send(ControllerEvent::Exit)
-                            .expect("ControllerEvent Exit cannot be sent");
+                            .send(ControllerRequest::Exit)
+                            .expect("ControllerRequest Exit cannot be sent");
 
                         while !emulator_thread.is_finished() {
                             *control_flow = ControlFlow::Exit
@@ -362,19 +370,19 @@ fn main() -> Result<(), Error> {
                     }
                 } else if event.id == config_open.id() {
                     input_sender
-                        .send(ControllerEvent::OpenConfig)
-                        .expect("ControllerEvent OpenConfig cannot be sent");
+                        .send(ControllerRequest::OpenConfig)
+                        .expect("ControllerRequest OpenConfig cannot be sent");
                 } else if event.id == quit.id() {
                     input_sender
-                        .send(ControllerEvent::Exit)
-                        .expect("ControllerEvent Exit cannot be sent");
+                        .send(ControllerRequest::Exit)
+                        .expect("ControllerRequest Exit cannot be sent");
                     while !emulator_thread.is_finished() {
                         *control_flow = ControlFlow::Exit
                     }
                 } else if event.id == config_reload.id() {
                     input_sender
-                        .send(ControllerEvent::LoadConfig)
-                        .expect("ControllerEvent LoadConfig cannot be sent");
+                        .send(ControllerRequest::LoadConfig)
+                        .expect("ControllerRequest LoadConfig cannot be sent");
                 } else if event.id == shader_switch.id() {
                     shader += 1;
                     (pixels, renderer) =
@@ -411,15 +419,15 @@ fn file_dialog(path: Option<PathBuf>) -> Option<PathBuf> {
     file
 }
 
-pub fn reload(file: PathBuf, sender: &SyncSender<ControllerEvent>) {
+pub fn reload(file: PathBuf, sender: &SyncSender<ControllerRequest>) {
     // Send the emulator instance to the event loop
 
-    //sender.send(ControllerEvent::LoadConfig(config)).unwrap();
+    //sender.send(ControllerRequest::LoadConfig(config)).unwrap();
 
     sender
-        .send(ControllerEvent::New(file))
-        .expect("ControllerEvent New cannot be sent");
-    //sender.send(ControllerEvent::LoadConfig()).unwrap();
+        .send(ControllerRequest::New(file))
+        .expect("ControllerRequest New cannot be sent");
+    //sender.send(ControllerRequest::LoadConfig()).unwrap();
 }
 
 pub fn new_renderer(window: &Window, shader: Option<Shader>) -> (Pixels, Renderer) {
@@ -466,5 +474,43 @@ pub fn to_text<'a>(key: Key<'a>) -> Option<String> {
     match text {
         "" => None,
         text => Some(text.into()),
+    }
+}
+
+pub fn notify(e: EmulatorError) {
+    println!("ERROR");
+    match e {
+        EmulatorError::InvalidCGB => {
+            Notification::new()
+                .summary("CGB Error")
+                .body("This Cartridge is for the CGB only.")
+                .auto_icon()
+                .show()
+                .unwrap();
+        }
+        EmulatorError::InvalidFileExtension => {
+            Notification::new()
+                .summary("File Error")
+                .body("File Extension is not valid.")
+                .auto_icon()
+                .show()
+                .unwrap();
+        }
+        EmulatorError::InvalidType(t) => {
+            Notification::new()
+                .summary("Invalid Cartridge Type")
+                .body(format!("{} is not supported.", t).as_str())
+                .auto_icon()
+                .show()
+                .unwrap();
+        }
+        EmulatorError::InvalidSave => {
+            Notification::new()
+                .summary("Save Error")
+                .body("Save file is not valid. Will be replaced.")
+                .auto_icon()
+                .show()
+                .unwrap();
+        } //_ => (),
     }
 }

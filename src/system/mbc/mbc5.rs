@@ -1,5 +1,7 @@
 use crate::system::mbc::{ram_banks, rom_banks, MBC};
 
+use super::MBCError;
+
 pub struct MBC5 {
     rom: Vec<u8>,
     ram: Vec<u8>,
@@ -88,10 +90,16 @@ impl MBC for MBC5 {
         }
     }
 
-    fn load_ram(&mut self, data: Vec<u8>) {
+    fn load_ram(&mut self, data: Vec<u8>) -> Result<(), MBCError> {
+        if data.len() != self.ram.len() {
+            return Err(MBCError::RAMLength);
+        }
+
         if self.battery {
             self.ram = data;
         }
+
+        Ok(())
     }
 
     fn save_ram(&self) -> Option<Vec<u8>> {

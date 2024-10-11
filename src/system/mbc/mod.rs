@@ -6,6 +6,12 @@ mod mbc5;
 
 const TITLE_LENGTH: usize = 11;
 
+pub enum MBCError {
+    CGB,
+    MBCType(u8),
+    RAMLength,
+}
+
 // MBC class that provides the abstract functions for MBC1, MBC2, 3 and 5.
 pub trait MBC: Send {
     fn read_rom(&self, address: u16) -> u8;
@@ -17,7 +23,7 @@ pub trait MBC: Send {
     fn write_ram(&mut self, value: u8, address: u16);
 
     // loads the RAM buffer into the MBC class.
-    fn load_ram(&mut self, data: Vec<u8>);
+    fn load_ram(&mut self, data: Vec<u8>) -> Result<(), MBCError>;
 
     // retrieves the RAM buffer, if battery is true. Else, it just returns None.
     fn save_ram(&self) -> Option<Vec<u8>>;
@@ -38,28 +44,29 @@ pub trait MBC: Send {
     }
 }
 
-pub fn new(data: Vec<u8>) -> Box<dyn MBC> {
+pub fn new(data: Vec<u8>) -> Result<Box<dyn MBC>, MBCError> {
     let mbc_type = data[0x147];
 
     // ensures that all cartridges are compatible with DMG, instead of CGB.
     if data[0x143] == 0xC0 {
-        panic!("This cartridge is only compatible with CGB.")
+        return Err(MBCError::CGB);
     }
 
     // prints the name of the cartridge type into the console log. Also additional check to see if type is valid.
-    name(mbc_type);
 
     // matches the MBC type with the corresponding class.
-    match mbc_type {
+    let cartridge: Box<dyn MBC> = match mbc_type {
         0x00 => Box::new(mbc0::MBC0::new(data)),
         0x01..=0x03 => Box::new(mbc1::MBC1::new(data)),
         0x05..=0x06 => Box::new(mbc2::MBC2::new(data)),
         0x0f..=0x13 => Box::new(mbc3::MBC3::new(data)),
         0x19..=0x1e => Box::new(mbc5::MBC5::new(data)),
-        _ => {
-            panic!("MBC 0x{:02X} not implemented.", mbc_type)
-        }
-    }
+        _ => return Err(MBCError::MBCType(mbc_type)),
+    };
+
+    name(mbc_type);
+
+    Ok(cartridge)
 }
 
 pub fn rom_banks(value: u8) -> usize {

@@ -36,6 +36,7 @@ impl Noise {
         }
     }
 
+    // calculates the period.
     fn period(&self) -> u32 {
         (self.divisor() as u32) << (self.shift as u32)
     }
@@ -131,6 +132,7 @@ impl Channel for Noise {
     }
 }
 
+// LFSR Register - For Psuedorandom Noise Generation
 struct LFSR {
     lfsr: u16,
     shift: u8,
