@@ -3,8 +3,6 @@ use std::sync::{Arc, Mutex};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{BufferSize, Sample, SampleRate, Stream, StreamConfig};
 
-use crate::emulator::apu::AudioPlayer;
-
 pub const SAMPLE_RATE: u32 = 48000;
 pub struct CpalPlayer {
     pub stream: Stream,

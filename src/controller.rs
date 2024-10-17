@@ -113,7 +113,6 @@ impl Controller {
 
                 Ok(ControllerEvent::Exit) => {
                     // Exits Emulator
-
                     break;
                 }
                 Err(TryRecvError::Disconnected) => break,

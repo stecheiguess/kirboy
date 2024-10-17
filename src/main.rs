@@ -7,14 +7,13 @@ use error_iter::ErrorIter as _;
 use log::error;
 use pixels::{Error, Pixels, SurfaceTexture};
 use std::path::PathBuf;
-use std::sync::mpsc::{sync_channel, TrySendError};
-use std::sync::mpsc::{Receiver, SyncSender};
+use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 use std::thread;
 use tao::dpi::LogicalSize;
 use tao::event::{ElementState, Event, WindowEvent};
-use tao::event_loop::{ControlFlow, EventLoopBuilder, EventLoopWindowTarget};
+use tao::event_loop::{ControlFlow, EventLoopBuilder};
 use tao::keyboard::Key;
-use tao::window::{Window, WindowBuilder};
+use tao::window::WindowBuilder;
 
 use rfd::FileDialog;
 
@@ -84,6 +83,7 @@ fn main() -> Result<(), Error> {
                 .with_min_inner_size(size)
                 .with_titlebar_transparent(true)
                 .with_fullsize_content_view(true)
+                .with_title("")
                 //.with_title_hidden(true)
                 //.with_title(title)
                 .build(&event_loop)
@@ -95,7 +95,7 @@ fn main() -> Result<(), Error> {
                 .with_inner_size(size)
                 .with_min_inner_size(size)
                 //.with_transparent(true)
-                //.with_title(&emulator.title())
+                .with_title("")
                 .build(&event_loop)
                 .unwrap()
         }
@@ -107,7 +107,7 @@ fn main() -> Result<(), Error> {
         Pixels::new(WIDTH, HEIGHT, surface_texture).expect("Pixels object cannot be created")
     };
 
-    reload(file.unwrap(), &input_sender, &output_receiver);
+    reload(file.unwrap(), &input_sender);
     // Start the emulator in a separate thread
 
     let emulator_thread = thread::spawn(move || {
@@ -215,37 +215,38 @@ fn main() -> Result<(), Error> {
     let menu_channel = MenuEvent::receiver();
 
     event_loop.run(move |event, event_loop, control_flow| {
-        *control_flow = ControlFlow::Poll;
-        window.request_redraw();
+        //*control_flow = ControlFlow::Poll;
+
         match event {
-            Event::RedrawRequested(_) => {
-                match output_receiver.try_recv() {
-                    Ok(ControllerEvent::Draw(buffer)) => {
-                        pixels.frame_mut().copy_from_slice(&buffer)
-                    }
-
-                    Ok(ControllerEvent::Title(title)) => {
-                        println!("{}", title);
-
-                        window.set_title(&title);
-                    }
-
-                    _ => (),
-                }
-
-                if let Err(err) = pixels.render() {
-                    log_error("pixels.render", err);
-
-                    input_sender
-                        .send(ControllerEvent::Exit)
-                        .expect("ControllerEvent Exit cannot be sent");
-                    while !emulator_thread.is_finished() {
-                        *control_flow = ControlFlow::Exit
-                    }
-
-                    return;
-                }
+            Event::MainEventsCleared => {
+                window.request_redraw();
             }
+            Event::RedrawRequested(_) => match output_receiver.try_recv() {
+                Ok(ControllerEvent::Draw(buffer)) => {
+                    pixels.frame_mut().copy_from_slice(&buffer);
+
+                    if let Err(err) = pixels.render() {
+                        log_error("pixels.render", err);
+
+                        input_sender
+                            .send(ControllerEvent::Exit)
+                            .expect("ControllerEvent Exit cannot be sent");
+                        while !emulator_thread.is_finished() {
+                            *control_flow = ControlFlow::Exit
+                        }
+
+                        return;
+                    }
+                }
+
+                Ok(ControllerEvent::Title(title)) => {
+                    println!("{}", title);
+
+                    window.set_title(&title);
+                }
+
+                _ => (),
+            },
 
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::KeyboardInput { event: input, .. } => {
@@ -292,7 +293,7 @@ fn main() -> Result<(), Error> {
                     }
                 }
                 WindowEvent::DroppedFile(file) => {
-                    reload(file, &input_sender, &output_receiver);
+                    reload(file, &input_sender);
                 }
                 _ => (),
             },
@@ -308,7 +309,7 @@ fn main() -> Result<(), Error> {
                 let file = file_dialog(None);
                 match file {
                     Some(f) => {
-                        reload(f, &input_sender, &output_receiver);
+                        reload(f, &input_sender);
                     }
                     None => (),
                 }
@@ -357,11 +358,7 @@ fn file_dialog(path: Option<PathBuf>) -> Option<PathBuf> {
     file
 }
 
-pub fn reload(
-    file: PathBuf,
-    sender: &SyncSender<ControllerEvent>,
-    receiver: &Receiver<ControllerEvent>,
-) {
+pub fn reload(file: PathBuf, sender: &SyncSender<ControllerEvent>) {
     // Send the emulator instance to the event loop
 
     //sender.send(ControllerEvent::LoadConfig(config)).unwrap();
@@ -375,18 +372,22 @@ pub fn reload(
 
 pub fn to_text<'a>(key: Key<'a>) -> Option<String> {
     let text = match key {
-        Key::Character(ch) => Some(ch.into()),
-        Key::Enter => Some("enter".into()),
-        Key::Backspace => Some("backspace".into()),
-        Key::Tab => Some("tab".into()),
-        Key::Space => Some("space".into()),
-        Key::Escape => Some("escape".into()),
-        Key::Shift => Some("shift".into()),
-        Key::ArrowDown => Some("down".into()),
-        Key::ArrowUp => Some("up".into()),
-        Key::ArrowLeft => Some("left".into()),
-        Key::ArrowRight => Some("right".into()),
-        _ => None,
+        Key::Character(ch) => ch,
+        Key::Enter => "enter",
+        Key::Backspace => "backspace",
+        Key::Tab => "tab",
+        Key::Space => "space",
+        Key::Escape => "escape",
+        Key::Shift => "shift",
+        Key::ArrowUp => "up",
+        Key::ArrowDown => "down",
+        Key::ArrowLeft => "left",
+        Key::ArrowRight => "right",
+        _ => "",
     };
-    text
+
+    match text {
+        "" => None,
+        text => Some(text.into()),
+    }
 }
