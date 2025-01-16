@@ -4,8 +4,10 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{BufferSize, Sample, SampleRate, Stream, StreamConfig};
 
 pub const SAMPLE_RATE: u32 = 48000;
+
 pub struct CpalPlayer {
     pub stream: Stream,
+    config: StreamConfig,
 }
 
 impl CpalPlayer {
@@ -18,25 +20,12 @@ impl CpalPlayer {
 
         println!("{}", s);
 
-        let mut supported_configs_range = device
-            .supported_output_configs()
-            .expect("error while querying configs");
-
-        let supported_config = supported_configs_range
-            .next()
-            .expect("no supported config?!")
-            .with_max_sample_rate();
+        let supported_config = device.default_output_config().unwrap();
 
         let sample_format = supported_config.sample_format();
 
         let config: StreamConfig = supported_config.into();
         println!("{:?}", config);
-
-        let config = StreamConfig {
-            channels: config.channels,
-            sample_rate: SampleRate(SAMPLE_RATE),
-            buffer_size: BufferSize::Default, // Experiment with larger values like 4096 or 8192
-        };
 
         println!("{:?}", sample_format);
 
@@ -104,7 +93,7 @@ impl CpalPlayer {
         };
 
         match stream {
-            Some(stream) => Some(Box::new(Self { stream })),
+            Some(stream) => Some(Box::new(Self { stream, config })),
             None => None,
         }
     }
@@ -113,6 +102,10 @@ impl CpalPlayer {
 impl Player for CpalPlayer {
     fn play(&self) {
         self.stream.play().unwrap();
+    }
+
+    fn sample(&self) -> u32 {
+        return self.config.sample_rate.0;
     }
 }
 
@@ -284,4 +277,6 @@ impl AudioPlayer for CpalPlayer {
 
 pub trait Player {
     fn play(&self) {}
+
+    fn sample(&self) -> u32;
 }

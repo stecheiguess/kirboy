@@ -454,7 +454,7 @@ impl GPU {
         }
     }*/
 
-    pub fn render_line(&mut self) {
+    pub fn draw_line(&mut self) {
         self.draw_bg_line();
         self.draw_window_line();
         self.draw_sprite_line();
@@ -485,7 +485,7 @@ impl GPU {
                 if self.clock >= DRAW_CYCLES {
                     self.mode = Mode::HBlank;
                     self.clock %= DRAW_CYCLES;
-                    self.render_line();
+                    self.draw_line();
                 }
             }
             // mode 0

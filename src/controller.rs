@@ -85,6 +85,10 @@ impl Controller {
                         None
                     };
                     if self.player.is_some() {
+                        self.emulator
+                            .as_mut()
+                            .unwrap()
+                            .sample(self.player.as_ref().unwrap().sample());
                         self.player.as_ref().unwrap().play();
                     }
 

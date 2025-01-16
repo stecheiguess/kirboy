@@ -1,6 +1,9 @@
 use blip_buf::BlipBuf;
 
-use super::channel::{Channel, Envelope, Length};
+use super::{
+    channel::{Channel, Envelope, Length},
+    timer::Timer,
+};
 
 pub struct Noise {
     on: bool,
@@ -10,7 +13,7 @@ pub struct Noise {
     divisor_code: u8,
     shift: u8,
     lfsr: LFSR,
-    clock: u32,
+    timer: Timer,
     pub from: u32,
     pub blip: BlipBuf,
     ampl: i32,
@@ -26,7 +29,7 @@ impl Noise {
             divisor_code: 7,
             shift: 0,
             lfsr: LFSR::new(),
-            clock: 0,
+            timer: Timer::new(2048),
             from: 0,
             blip,
             ampl: 0,
@@ -80,6 +83,8 @@ impl Channel for Noise {
                 self.lfsr.set(value);
 
                 self.shift = value >> 4;
+
+                self.timer.period = self.period();
             }
 
             0xff23 => {
@@ -105,28 +110,23 @@ impl Channel for Noise {
     }
 
     fn step(&mut self, t_cycles: u32) {
-        for _ in 0..(t_cycles) {
-            self.clock += 1;
-            if self.clock >= self.period() {
-                self.on &= self.length.active();
-                let ampl = if !self.on {
-                    0x00
-                } else if self.lfsr.step() {
-                    self.envelope.volume as i32
-                } else {
-                    (self.envelope.volume as i32) * -1
-                };
+        for _ in 0..self.timer.step(t_cycles) {
+            self.on &= self.length.active();
+            let ampl = if !self.on {
+                0x00
+            } else if self.lfsr.step() {
+                self.envelope.volume as i32
+            } else {
+                (self.envelope.volume as i32) * -1
+            };
 
-                //let ampl = 0;
+            //let ampl = 0;
 
-                self.from = self.from.wrapping_add(self.clock);
+            self.from = self.from.wrapping_add(self.timer.period);
 
-                let d = ampl - self.ampl;
-                self.ampl = ampl;
-                self.blip.add_delta(self.from, d);
-
-                self.clock = 0;
-            }
+            let d = ampl - self.ampl;
+            self.ampl = ampl;
+            self.blip.add_delta(self.from, d);
         }
     }
 }

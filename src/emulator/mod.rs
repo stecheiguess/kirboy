@@ -163,6 +163,10 @@ impl Emulator {
         }
         println!("Saved");
     }
+
+    pub fn sample(&mut self, sample: u32) {
+        self.cpu.mmu.apu.sample(sample);
+    }
 }
 
 // dumps save when exit.

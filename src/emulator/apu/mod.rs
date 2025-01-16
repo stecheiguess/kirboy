@@ -4,6 +4,7 @@ use blip_buf::BlipBuf;
 use channel::Channel;
 use noise::Noise;
 use square::Square;
+use timer::Timer;
 use wave::Wave;
 
 use crate::player::SAMPLE_RATE;
@@ -13,6 +14,7 @@ use super::CLOCK_FREQUENCY;
 mod channel;
 mod noise;
 mod square;
+mod timer;
 mod wave;
 
 const APU_FREQUENCY: u32 = CLOCK_FREQUENCY / 512;
@@ -23,7 +25,7 @@ pub struct APU {
     panning: u8,
     volume_left: u8,
     volume_right: u8,
-    clock: u32,
+    timer: Timer,
     ch1: Square,
     ch2: Square,
     ch3: Wave,
@@ -39,13 +41,20 @@ impl APU {
             panning: 0,
             volume_left: 0,
             volume_right: 0,
-            clock: 0,
-            ch1: Square::new(create_blipbuf(), true),
-            ch2: Square::new(create_blipbuf(), false),
-            ch3: Wave::new(create_blipbuf()),
-            ch4: Noise::new(create_blipbuf()),
+            timer: Timer::new(APU_FREQUENCY),
+            ch1: Square::new(create_blipbuf(SAMPLE_RATE), true),
+            ch2: Square::new(create_blipbuf(SAMPLE_RATE), false),
+            ch3: Wave::new(create_blipbuf(SAMPLE_RATE)),
+            ch4: Noise::new(create_blipbuf(SAMPLE_RATE)),
             buffer: Arc::new(Mutex::new(Vec::new())),
         }
+    }
+
+    pub fn sample(&mut self, sample: u32) {
+        self.ch1 = Square::new(create_blipbuf(sample), true);
+        self.ch2 = Square::new(create_blipbuf(sample), false);
+        self.ch3 = Wave::new(create_blipbuf(sample));
+        self.ch4 = Noise::new(create_blipbuf(sample));
     }
 
     pub fn read(&self, address: u16) -> u8 {
@@ -98,13 +107,13 @@ impl APU {
             return;
         }
 
-        self.clock += m_cycles as u32 * 4;
+        let cycles = m_cycles as u32 * 4;
 
-        if self.clock >= (APU_FREQUENCY) {
-            self.ch1.step(self.clock);
-            self.ch2.step(self.clock);
-            self.ch3.step(self.clock);
-            self.ch4.step(self.clock);
+        for _ in 0..self.timer.step(cycles) {
+            self.ch1.step(self.timer.period);
+            self.ch2.step(self.timer.period);
+            self.ch3.step(self.timer.period);
+            self.ch4.step(self.timer.period);
 
             let step = self.sequencer.step();
 
@@ -135,18 +144,17 @@ impl APU {
                 _ => (),
             }
 
-            self.ch1.blip.end_frame(self.clock);
-            self.ch2.blip.end_frame(self.clock);
-            self.ch3.blip.end_frame(self.clock);
-            self.ch4.blip.end_frame(self.clock);
+            self.ch1.blip.end_frame(self.timer.period);
+            self.ch2.blip.end_frame(self.timer.period);
+            self.ch3.blip.end_frame(self.timer.period);
+            self.ch4.blip.end_frame(self.timer.period);
 
-            self.ch1.from = self.ch1.from.wrapping_sub(self.clock);
-            self.ch2.from = self.ch2.from.wrapping_sub(self.clock);
-            self.ch3.from = self.ch3.from.wrapping_sub(self.clock);
-            self.ch4.from = self.ch4.from.wrapping_sub(self.clock);
+            self.ch1.from = self.ch1.from.wrapping_sub(self.timer.period);
+            self.ch2.from = self.ch2.from.wrapping_sub(self.timer.period);
+            self.ch3.from = self.ch3.from.wrapping_sub(self.timer.period);
+            self.ch4.from = self.ch4.from.wrapping_sub(self.timer.period);
 
             self.mix();
-            self.clock = 0;
         }
     }
 
@@ -256,9 +264,9 @@ impl Sequencer {
     }
 }
 
-pub fn create_blipbuf() -> BlipBuf {
-    let mut blipbuf = BlipBuf::new(SAMPLE_RATE);
-    blipbuf.set_rates(CLOCK_FREQUENCY as f64, SAMPLE_RATE as f64);
+pub fn create_blipbuf(sample: u32) -> BlipBuf {
+    let mut blipbuf = BlipBuf::new(sample);
+    blipbuf.set_rates(CLOCK_FREQUENCY as f64, sample as f64);
     blipbuf
 }
 

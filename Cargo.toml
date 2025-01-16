@@ -30,6 +30,7 @@ anyhow = "1.0.88"
 parse = "0.1.2"
 clap = "4.5.17"
 blip_buf = "0.1.4"
+bytemuck = "1.21.0"
 
 
 

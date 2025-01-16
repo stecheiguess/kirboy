@@ -1,11 +1,14 @@
 use blip_buf::BlipBuf;
 
-use super::channel::{Channel, Length};
+use super::{
+    channel::{Channel, Length},
+    timer::Timer,
+};
 
 pub struct Wave {
     pub length: Length,
     dac: bool,
-    clock: u32,
+    timer: Timer,
     wave_ram: [u8; 16],
     on: bool,
     volume: u8,
@@ -21,7 +24,7 @@ impl Wave {
         Self {
             length: Length::new(256),
             dac: false,
-            clock: 0,
+            timer: Timer::new(8192),
             wave_ram: [0; 16],
             on: false,
             volume: 0,
@@ -78,6 +81,8 @@ impl Channel for Wave {
             //nrx3
             0xff1d => {
                 self.frequency = (self.frequency & 0xff00) | (value as u16);
+
+                self.timer.period = self.period();
             }
 
             //nrx4
@@ -87,6 +92,8 @@ impl Channel for Wave {
                 self.length.on = value & 0x40 == 0x40;
 
                 self.on &= self.length.active();
+
+                self.timer.period = self.period();
 
                 // if set
                 if value & 0x80 == 0x80 {
@@ -114,33 +121,29 @@ impl Channel for Wave {
             _ => panic!("Invalid match for Wave Volume"),
         };
 
-        for _ in 0..(t_cycles) {
-            self.clock += 1;
-            if self.clock >= self.period() {
-                self.on &= self.length.active();
-                let sample = if self.wave_index & 0x1 == 0 {
-                    self.wave_ram[self.wave_index >> 1] & 0xf
-                } else {
-                    self.wave_ram[self.wave_index >> 1] >> 4
-                };
+        for _ in 0..self.timer.step(t_cycles) {
+            self.on &= self.length.active();
+            let sample = if self.wave_index & 0x1 == 0 {
+                self.wave_ram[self.wave_index >> 1] & 0xf
+            } else {
+                self.wave_ram[self.wave_index >> 1] >> 4
+            };
 
-                let ampl = if self.on && self.dac {
-                    ((sample << 2) >> volume) as i32
-                } else {
-                    0x00
-                };
+            let ampl = if self.on && self.dac {
+                ((sample << 2) >> volume) as i32
+            } else {
+                0x00
+            };
 
-                //let ampl = 0;
+            //let ampl = 0;
 
-                self.from = self.from.wrapping_add(self.clock);
+            self.from = self.from.wrapping_add(self.timer.period);
 
-                let d = ampl - self.ampl;
-                self.ampl = ampl;
-                self.blip.add_delta(self.from, d);
+            let d = ampl - self.ampl;
+            self.ampl = ampl;
+            self.blip.add_delta(self.from, d);
 
-                self.wave_index = (self.wave_index + 1) % 32;
-                self.clock = 0;
-            }
+            self.wave_index = (self.wave_index + 1) % 32;
         }
     }
 }

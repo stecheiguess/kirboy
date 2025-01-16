@@ -40,7 +40,7 @@ impl MBC1 {
         match self.rom_banks {
             0..=32 => 0,
             64 => (self.ram_bank & 0x1) << 5,
-            128 => self.ram_bank << 5,
+            128 => (self.ram_bank & 0x3) << 5,
             _ => {
                 panic!("invalid zero bank")
             }
@@ -49,7 +49,7 @@ impl MBC1 {
 
     fn high_bank(&self) -> usize {
         match self.rom_banks {
-            0..=32 => self.rom_bank,
+            0..=32 => (self.rom_bank & 0x1f),
             64 => (self.rom_bank & 0x1f) | ((self.ram_bank & 0x1) << 5),
             128 => (self.rom_bank & 0x1f) | ((self.ram_bank & 0x3) << 5),
             _ => {
@@ -74,6 +74,7 @@ impl MBC for MBC1 {
         //println!("{}", ram_address);
         self.ram[ram_address]
     }
+
     fn read_rom(&self, address: u16) -> u8 {
         match address {
             0x0000..=0x3fff => {
@@ -90,15 +91,16 @@ impl MBC for MBC1 {
             }
         }
     }
+
     fn write_ram(&mut self, value: u8, address: u16) {
         if !self.ram_on {
             return;
         }
 
         let ram_address = if self.mode {
-            (0x2000 * self.ram_bank) | ((address & 0x1fff) as usize)
+            self.ram_bank * 0x2000 | address as usize & 0x1fff
         } else {
-            (address & 0x1fff) as usize
+            address as usize & 0x1fff
         };
 
         if ram_address < self.ram.len() {
@@ -113,7 +115,7 @@ impl MBC for MBC1 {
                 self.ram_on = (value & 0xf) == 0xa;
             }
 
-            // rom bank
+            // setting rom bank
             0x2000..=0x3fff => {
                 // mask for determining bank https://hacktix.github.io/GBEDG/mbcs/mbc1/
 
@@ -125,13 +127,11 @@ impl MBC for MBC1 {
                 }
             }
 
-            // ram bank
+            // setting ram bank
             0x4000..=0x5fff => {
-                if self.ram_banks > 1 {
-                    self.ram_bank = (value & 0x11) as usize;
-                }
+                self.ram_bank = (value & 0x11) as usize;
 
-                // also rom bank
+                // also rom bank - to determine banks past 32.
                 if self.rom_banks > 32 {
                     self.rom_bank = match self.rom_banks {
                         64 => (self.rom_bank & 0x1f) | (((value as usize) & 0x1) << 5),

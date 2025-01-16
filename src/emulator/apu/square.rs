@@ -1,13 +1,16 @@
 use blip_buf::BlipBuf;
 
-use super::channel::{Channel, Envelope, Length};
+use super::{
+    channel::{Channel, Envelope, Length},
+    timer::Timer,
+};
 
 pub struct Square {
     on: bool,
     dac: bool,
     duty: u8,
     frequency: u16,
-    clock: u32,
+    timer: Timer,
     duty_step: u8,
     //blip: BlipBuf,
     sweep: Sweep,
@@ -26,7 +29,7 @@ impl Square {
             dac: false,
             duty: 1,
             frequency: 0,
-            clock: 2048,
+            timer: Timer::new(8192),
             duty_step: 0,
             sweep: Sweep::new(),
             length: Length::new(64),
@@ -146,11 +149,13 @@ impl Channel for Square {
             // nrx3
             0xff13 | 0xff18 => {
                 self.frequency = (self.frequency & 0xff00) | (value as u16);
+                self.timer.period = self.period();
                 //self.period();
             }
             // nrx4
             0xff14 | 0xff19 => {
                 self.frequency = (self.frequency & 0xff) | ((value as u16 & 0x07) << 8);
+                self.timer.period = self.period();
 
                 self.length.on = value & 0x40 == 0x40;
 
@@ -183,27 +188,23 @@ impl Channel for Square {
     }
 
     fn step(&mut self, t_cycles: u32) {
-        for _ in 0..(t_cycles) {
-            self.clock += 1;
-            if self.clock >= self.period() {
-                self.on &= self.length.active();
-                let ampl = if !self.on {
-                    0x00
-                } else if self.duty_phase() {
-                    self.envelope.volume as i32
-                } else {
-                    (self.envelope.volume as i32) * -1
-                };
+        for _ in 0..self.timer.step(t_cycles) {
+            self.on &= self.length.active();
+            let ampl = if !self.on {
+                0x00
+            } else if self.duty_phase() {
+                self.envelope.volume as i32
+            } else {
+                (self.envelope.volume as i32) * -1
+            };
 
-                self.from = self.from.wrapping_add(self.clock);
+            self.from = self.from.wrapping_add(self.timer.period);
 
-                let d = ampl - self.ampl;
-                self.ampl = ampl;
-                self.blip.add_delta(self.from, d);
+            let d = ampl - self.ampl;
+            self.ampl = ampl;
+            self.blip.add_delta(self.from, d);
 
-                self.duty_step = (self.duty_step + 1) % 8;
-                self.clock = 0;
-            }
+            self.duty_step = (self.duty_step + 1) % 8;
         }
     }
 }

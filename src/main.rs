@@ -6,6 +6,7 @@ use dirs::download_dir;
 use error_iter::ErrorIter as _;
 use log::error;
 use pixels::{Error, Pixels, SurfaceTexture};
+use renderer::Renderer;
 use std::path::PathBuf;
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 use std::thread;
@@ -13,7 +14,7 @@ use tao::dpi::LogicalSize;
 use tao::event::{ElementState, Event, WindowEvent};
 use tao::event_loop::{ControlFlow, EventLoopBuilder};
 use tao::keyboard::Key;
-use tao::window::WindowBuilder;
+use tao::window::{Window, WindowBuilder};
 
 use rfd::FileDialog;
 
@@ -26,6 +27,8 @@ mod config;
 mod controller;
 mod emulator;
 mod player;
+mod renderer;
+
 #[cfg(target_os = "macos")]
 use tao::platform::macos::WindowBuilderExtMacOS;
 #[cfg(target_os = "linux")]
@@ -101,13 +104,16 @@ fn main() -> Result<(), Error> {
         }
     };
 
+    let window_size = window.inner_size();
     let mut pixels = {
-        let window_size = window.inner_size();
         let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
         Pixels::new(WIDTH, HEIGHT, surface_texture).expect("Pixels object cannot be created")
     };
 
-    reload(file.unwrap(), &input_sender);
+    let mut renderer = Renderer::new(&pixels, window_size.width, window_size.height).unwrap();
+
+    reload(file.unwrap(), &input_sender, &mut renderer);
+
     // Start the emulator in a separate thread
 
     let emulator_thread = thread::spawn(move || {
@@ -225,7 +231,22 @@ fn main() -> Result<(), Error> {
                 Ok(ControllerEvent::Draw(buffer)) => {
                     pixels.frame_mut().copy_from_slice(&buffer);
 
-                    if let Err(err) = pixels.render() {
+                    let render_result = pixels.render_with(|encoder, render_target, context| {
+                        let noise_texture = renderer.texture_view();
+                        context.scaling_renderer.render(encoder, noise_texture);
+
+                        renderer.update(&context.queue);
+
+                        renderer.render(
+                            encoder,
+                            render_target,
+                            context.scaling_renderer.clip_rect(),
+                        );
+
+                        Ok(())
+                    });
+
+                    if let Err(err) = render_result {
                         log_error("pixels.render", err);
 
                         input_sender
@@ -291,9 +312,19 @@ fn main() -> Result<(), Error> {
 
                         return;
                     }
+
+                    if let Err(err) = renderer.resize(&pixels, size.width, size.height) {
+                        log_error("renderer.resize", err);
+
+                        while !emulator_thread.is_finished() {
+                            *control_flow = ControlFlow::Exit
+                        }
+
+                        return;
+                    }
                 }
                 WindowEvent::DroppedFile(file) => {
-                    reload(file, &input_sender);
+                    reload(file, &input_sender, &mut renderer);
                 }
                 _ => (),
             },
@@ -309,7 +340,7 @@ fn main() -> Result<(), Error> {
                 let file = file_dialog(None);
                 match file {
                     Some(f) => {
-                        reload(f, &input_sender);
+                        reload(f, &input_sender, &mut renderer);
                     }
                     None => (),
                 }
@@ -358,7 +389,7 @@ fn file_dialog(path: Option<PathBuf>) -> Option<PathBuf> {
     file
 }
 
-pub fn reload(file: PathBuf, sender: &SyncSender<ControllerEvent>) {
+pub fn reload(file: PathBuf, sender: &SyncSender<ControllerEvent>, renderer: &mut Renderer) {
     // Send the emulator instance to the event loop
 
     //sender.send(ControllerEvent::LoadConfig(config)).unwrap();
@@ -367,6 +398,7 @@ pub fn reload(file: PathBuf, sender: &SyncSender<ControllerEvent>) {
         .send(ControllerEvent::New(file))
         .expect("ControllerEvent New cannot be sent");
 
+    renderer.reset();
     //sender.send(ControllerEvent::LoadConfig()).unwrap();
 }
 
