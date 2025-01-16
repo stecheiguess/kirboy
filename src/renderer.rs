@@ -12,6 +12,9 @@ pub struct Renderer {
     render_pipeline: wgpu::RenderPipeline,
     time_buffer: wgpu::Buffer,
     vertex_buffer: wgpu::Buffer,
+    cutout_buffer: wgpu::Buffer,
+    width: u32,
+    height: u32,
     time: f32,
 }
 
@@ -42,12 +45,15 @@ impl Renderer {
         });
 
         // Create vertex buffer; array-of-array of position and texture coordinates
-        let vertex_data: [[f32; 2]; 3] = [
+        let vertex_data: [[f32; 4]; 6] = [
             // One full-screen triangle
             // See: https://github.com/parasyte/pixels/issues/180
-            [-1.0, -1.0],
-            [3.0, -1.0],
-            [-1.0, 3.0],
+            [-1.0, -1.0, 0.0, 0.0], // Bottom-left
+            [1.0, -1.0, 1.0, 0.0],  // Bottom-right
+            [-1.0, 1.0, 0.0, 1.0],  // Top-left
+            [-1.0, 1.0, 0.0, 1.0],  // Top-left
+            [1.0, -1.0, 1.0, 0.0],  // Bottom-right
+            [1.0, 1.0, 1.0, 1.0],
         ];
         let vertex_data_slice = bytemuck::cast_slice(&vertex_data);
         println!("{:?}", vertex_data_slice);
@@ -70,6 +76,12 @@ impl Renderer {
         let time_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Renderer u_Time"),
             contents: &0.0_f32.to_ne_bytes(),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let cutout_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Cutout Region Buffer"),
+            contents: bytemuck::cast_slice(&[0.0_f32, 0.0_f32, 1.0_f32, 1.0_f32]), // Default: full screen
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
@@ -103,6 +115,18 @@ impl Renderer {
                     },
                     count: None,
                 },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: wgpu::BufferSize::new(
+                            std::mem::size_of::<[f32; 4]>() as u64
+                        ),
+                    },
+                    count: None,
+                },
             ],
         });
         let bind_group = create_bind_group(
@@ -111,6 +135,7 @@ impl Renderer {
             &texture_view,
             &sampler,
             &time_buffer,
+            &cutout_buffer,
         );
 
         // Create pipeline
@@ -153,6 +178,9 @@ impl Renderer {
             render_pipeline,
             time_buffer,
             vertex_buffer,
+            cutout_buffer,
+            width,
+            height,
             time: 0.,
         })
     }
@@ -174,7 +202,11 @@ impl Renderer {
             &self.texture_view,
             &self.sampler,
             &self.time_buffer,
+            &self.cutout_buffer,
         );
+
+        self.width = width;
+        self.height = height;
 
         Ok(())
     }
@@ -189,6 +221,7 @@ impl Renderer {
         encoder: &mut wgpu::CommandEncoder,
         render_target: &wgpu::TextureView,
         clip_rect: (u32, u32, u32, u32),
+        queue: &wgpu::Queue,
     ) {
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Renderer render pass"),
@@ -205,8 +238,21 @@ impl Renderer {
         rpass.set_pipeline(&self.render_pipeline);
         rpass.set_bind_group(0, &self.bind_group, &[]);
         rpass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-        rpass.set_scissor_rect(clip_rect.0, clip_rect.1, clip_rect.2, clip_rect.3);
-        rpass.draw(0..3, 0..1);
+        //rpass.set_scissor_rect(clip_rect.0, clip_rect.1, clip_rect.2, clip_rect.3);
+        rpass.draw(0..6, 0..1);
+
+        //println!("{:?}", clip_rect.0 as f32 / self.width as f32);
+
+        queue.write_buffer(
+            &self.cutout_buffer,
+            0,
+            bytemuck::cast_slice(&[
+                clip_rect.0 as f32 / self.width as f32,
+                clip_rect.1 as f32 / self.height as f32,
+                clip_rect.2 as f32 / self.width as f32,
+                clip_rect.3 as f32 / self.height as f32,
+            ]),
+        );
     }
 
     pub fn reset(&mut self) {
@@ -247,6 +293,7 @@ fn create_bind_group(
     texture_view: &wgpu::TextureView,
     sampler: &wgpu::Sampler,
     time_buffer: &wgpu::Buffer,
+    cutout_buffer: &wgpu::Buffer,
 ) -> pixels::wgpu::BindGroup {
     device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: None,
@@ -263,6 +310,10 @@ fn create_bind_group(
             wgpu::BindGroupEntry {
                 binding: 2,
                 resource: time_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 3,
+                resource: cutout_buffer.as_entire_binding(),
             },
         ],
     })

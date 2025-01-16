@@ -232,8 +232,9 @@ fn main() -> Result<(), Error> {
                     pixels.frame_mut().copy_from_slice(&buffer);
 
                     let render_result = pixels.render_with(|encoder, render_target, context| {
-                        let noise_texture = renderer.texture_view();
-                        context.scaling_renderer.render(encoder, noise_texture);
+                        context
+                            .scaling_renderer
+                            .render(encoder, renderer.texture_view());
 
                         renderer.update(&context.queue);
 
@@ -241,6 +242,7 @@ fn main() -> Result<(), Error> {
                             encoder,
                             render_target,
                             context.scaling_renderer.clip_rect(),
+                            (&context.queue),
                         );
 
                         Ok(())
