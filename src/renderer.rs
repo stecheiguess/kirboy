@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use pixels::{
     check_texture_size,
     wgpu::{self, util::DeviceExt},
@@ -19,10 +21,17 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    pub fn new(pixels: &Pixels, width: u32, height: u32) -> Result<Self, TextureError> {
+    pub fn new(
+        pixels: &Pixels,
+        width: u32,
+        height: u32,
+        shader_file: &str,
+    ) -> Result<Self, TextureError> {
         let device = pixels.device();
-        let shader = wgpu::include_wgsl!("shaders/crt.wgsl");
-        let module = device.create_shader_module(shader);
+        let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Shader"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("shaders/gb.wgsl").into()),
+        });
 
         // Create a texture view that will be used as input
         // This will be used as the render target for the default scaling renderer
@@ -48,12 +57,12 @@ impl Renderer {
         let vertex_data: [[f32; 4]; 6] = [
             // One full-screen triangle
             // See: https://github.com/parasyte/pixels/issues/180
-            [-1.0, -1.0, 0.0, 0.0], // Bottom-left
-            [1.0, -1.0, 1.0, 0.0],  // Bottom-right
-            [-1.0, 1.0, 0.0, 1.0],  // Top-left
-            [-1.0, 1.0, 0.0, 1.0],  // Top-left
-            [1.0, -1.0, 1.0, 0.0],  // Bottom-right
-            [1.0, 1.0, 1.0, 1.0],
+            [-2.0, -2.0, 0.0, 0.0], // Bottom-left
+            [2.0, -2.0, 2.0, 0.0],  // Bottom-right
+            [-2.0, 2.0, 0.0, 2.0],  // Top-left
+            [-2.0, 2.0, 0.0, 2.0],  // Top-left
+            [2.0, -2.0, 2.0, 0.0],  // Bottom-right
+            [2.0, 2.0, 2.0, 2.0],
         ];
         let vertex_data_slice = bytemuck::cast_slice(&vertex_data);
         println!("{:?}", vertex_data_slice);
@@ -161,8 +170,8 @@ impl Renderer {
                 targets: &[Some(wgpu::ColorTargetState {
                     format: pixels.render_texture_format(),
                     blend: Some(wgpu::BlendState {
-                        color: wgpu::BlendComponent::REPLACE,
-                        alpha: wgpu::BlendComponent::REPLACE,
+                        color: wgpu::BlendComponent::OVER,
+                        alpha: wgpu::BlendComponent::OVER,
                     }),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],

@@ -110,7 +110,13 @@ fn main() -> Result<(), Error> {
         Pixels::new(WIDTH, HEIGHT, surface_texture).expect("Pixels object cannot be created")
     };
 
-    let mut renderer = Renderer::new(&pixels, window_size.width, window_size.height).unwrap();
+    let mut renderer = Renderer::new(
+        &pixels,
+        window_size.width,
+        window_size.height,
+        "shaders/crt.wgsl",
+    )
+    .unwrap();
 
     reload(file.unwrap(), &input_sender, &mut renderer);
 

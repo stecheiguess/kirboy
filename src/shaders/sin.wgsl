@@ -35,27 +35,6 @@ struct Locals {
 
 const tau = 6.283185307179586476925286766559;
 
-fn curve(uv: vec2<f32>) -> vec2<f32> {
-        // as we near the edge of our screen apply greater distortion using a cubic function
-        let curvature = 4.;
-        let scaledUV = (uv - vec2<f32>(0.5, 0.5)) * 2.0;
-        let offset = abs(scaledUV.yx) / vec2<f32>(curvature);
-        let distortedUV = scaledUV + scaledUV * offset * offset; 
-        
-        let finalUV = (distortedUV / 2.0) + vec2<f32>(0.5, 0.5);
-        
-        // Distance from the center
-        let vignette = smoothstep(vec2<f32>(0.), vec2<f32>(0.7), (1.0 - abs(distortedUV)));
-
-        return finalUV;
-}
-
-fn vignette(uv: vec2<f32>,  opacity: f32) -> vec4<f32> {
-    let intensity = uv.x * uv.y * (1.0 - uv.x) * (1.0 - uv.y) * 2.;
-    let vignette = pow(intensity, opacity);
-    return vec4<f32>(vec3<f32>(clamp(vignette, 0.0, 1.0)), 1.0);
-}
-
 
 fn remap(uv: vec2<f32>) -> vec2<f32> {
     return uv * vec2<f32>(cutout.width, cutout.height) + vec2<f32>(cutout.x, cutout.y);
@@ -69,43 +48,30 @@ fn reverse(uv:vec2<f32>) -> vec2<f32> {
 @fragment
 fn fs_main(@location(0) tex_coord: vec2<f32>) -> @location(0) vec4<f32> {
 
-    
-
-    let curved = remap(curve(tex_coord));
 
 
-    let sampled_color = textureSample(r_tex_color, r_tex_sampler, curved);
+    let wave_frequency: f32 = 10.0; // Number of waves along the x-axis
+    let wave_amplitude: f32 = 0.05; // Amplitude of the wave (displacement)
+    let wave_speed: f32 = 1.0; // Speed of the wave animation
 
-    let s_count = 100.;
-    let i = sin((curved.y - r_locals.time * 0.1) * s_count * tau / cutout.height);
-    let s = (i * 0.25 + 0.75);
-    let scan = vec4<f32>(vec3<f32>(pow(s, 0.5)), 1.0);
-    
-    
-    
+    // Offset the y-coordinate based on a sine wave
+    let wave_offset = wave_amplitude * sin(tex_coord.x * wave_frequency + r_locals.time * wave_speed);
+    let displaced_tex_coord = vec2<f32>(tex_coord.x, tex_coord.y + wave_offset);
 
+    // Sample the texture with the displaced coordinates
+    let sampled_color = textureSample(r_tex_color, r_tex_sampler, remap(displaced_tex_coord));
 
-    if (tex_coord.x < (0.1) && tex_coord.y < (0.1)) {
-        return vec4<f32>(0., 255., 0., 1.);
-    }
-
-    if (tex_coord.x < (0.1) && tex_coord.y > (0.9)) {
-        return vec4<f32>(255., 0., 0., 1.);
-    }
-
-    if (tex_coord.x > (0.9) && tex_coord.y > (0.9)) {
-        return vec4<f32>(0., 0., 255., 1.);
-    }
-
-    if (curved.x < 0.0 || curved.x > 1.0 ||
-        curved.y < 0.0 || curved.y > 1.0) {
+    if (displaced_tex_coord.x < 0. || displaced_tex_coord.x > 1. ||
+        displaced_tex_coord.y < 0. || displaced_tex_coord.y > 1.) {
         // Return black for out-of-bounds pixels
-        return vec4<f32>(0., 0., 0., 0.);
-    }
+        discard;
+    };
 
+
+    // Return the sampled color
+    return vec4<f32>(sampled_color);
 
     //
-
     /*let edge_fade = vec4<f32>(smoothstep(0.0, 0.05, curved.x) *
                 smoothstep(0.0, 0.05, curved.y) *
                 smoothstep(1.0, 0.95, curved.x) *
@@ -116,6 +82,6 @@ fn fs_main(@location(0) tex_coord: vec2<f32>) -> @location(0) vec4<f32> {
     //let noise_color = vec3<f32>(min(r_locals.time, 1.)); //vec3<f32>(random_vec2(tex_coord.xy * vec2<f32>(r_locals.time % tau + bias)));
 
     //return vec4<f32>(sampled_color);
-
-    return vec4<f32>(sampled_color * scan * vignette(reverse(curved), 0.4)); //* edge_fade);
 }
+
+
