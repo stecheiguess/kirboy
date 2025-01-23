@@ -9,7 +9,9 @@ struct CutoutRegion {
     x: f32,      // X offset (normalized)
     y: f32,       // Y offset (normalized)
     width: f32,   // Width (normalized)
-    height: f32,  // Height (normalized)
+    height: f32,
+    b_width: f32,
+    b_height: f32,  // Height (normalized)
 };
 
 @group(0) @binding(3) var<uniform> cutout: CutoutRegion;
@@ -34,6 +36,7 @@ struct Locals {
 @group(0) @binding(2) var<uniform> r_locals: Locals;
 
 const tau = 6.283185307179586476925286766559;
+const one_over_root_two = 0.70710678118;
 
 fn hsv_to_rgb(c: vec3<f32>) -> vec3<f32> {
     let K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
@@ -59,35 +62,48 @@ fn fs_main(@location(0) tex_coord: vec2<f32>) -> @location(0) vec4<f32> {
 
     // Create the green filter effect
     // Amplify the green channel and reduce red/blue
-    let filter_color =  vec3<f32>(0.56, 0.73, 0.14); // Example: purple filter
 
-    // Define the filter strength
-    // Full strength
+    let avg = (color.r + color.g + color.b) / 3.;
+    let filter_color =  vec3<f32>(0.773, 0.980, 0.145);
 
-    let s_count = 160.;
-    let i = sin(remap(tex_coord).x * s_count * tau / cutout.height);
-    let s = (i * 0.25 + 0.75);
-    let scan = vec4<f32>(vec3<f32>(pow(s, 0.5)), 1.0);
+    let filter_param = 0.2;
+
+    let pixel_coord = vec2<f32>(
+        tex_coord.x * cutout.b_width,
+        tex_coord.y * cutout.b_height,
+    );
+
+
+    if (tex_coord.x < 0. || tex_coord.x > 1. ||
+        tex_coord.y < 0. || tex_coord.y > 1.) {
+        // Return black for out-of-bounds pixels
+        discard;
+    };
+
+    // Calculate edge brightness effect
+
+    let from_center = vec2<f32>(
+        pixel_coord.x - floor(pixel_coord.x) - 0.5,
+        pixel_coord.y - floor(pixel_coord.y) - 0.5
+    );
+    let distance = max(abs(from_center.x), abs(from_center.y));
+
+    // Use smoothstep to adjust alpha based on distance from the center
+    //let alpha = 1.0 - smoothstep(0.0, one_over_root_two, distance);
+
+    let filtered = vec3<f32>(avg * 0.4 + 0.2) * filter_color;
+
+    let shade = vec4<f32>((filtered - 0.15), smoothstep(0., 0.9, (1. - distance)));
+
     
+    //let bright = (vec4<f32>(0.851, 0.961, 0.145, alpha));
 
-    // Apply the custom color filter
-    let filtered = color.rgb * filter_color;
+    // Apply the custom color filte
 
 
     // Return the filtered color with alpha unchanged
-    return vec4<f32>(filtered.rgb, color.a) * scan;
-
-    //
-    /*let edge_fade = vec4<f32>(smoothstep(0.0, 0.05, curved.x) *
-                smoothstep(0.0, 0.05, curved.y) *
-                smoothstep(1.0, 0.95, curved.x) *
-                smoothstep(1.0, 0.95, curved.y), 1.);
-*/
-
-    //let noise_color = vec3<f32>((sin(15.*r_locals.time)*0.5) + 0.5); 
-    //let noise_color = vec3<f32>(min(r_locals.time, 1.)); //vec3<f32>(random_vec2(tex_coord.xy * vec2<f32>(r_locals.time % tau + bias)));
-
-    //return vec4<f32>(sampled_color);
+    return mix(vec4<f32>(filtered, 1.), shade, shade.a);
 }
+
 
 

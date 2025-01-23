@@ -65,9 +65,11 @@ fn fs_main(@location(0) tex_coord: vec2<f32>) -> @location(0) vec4<f32> {
     // Convert the cycling hue, saturation, and value to RGB
     let cycling_rgb = hsv_to_rgb(vec3<f32>(cycling_hue, 1. - value, 1.));
 
+
     return vec4<f32>(cycling_rgb, 1.0);
 
-    //
+    
+    
     /*let edge_fade = vec4<f32>(smoothstep(0.0, 0.05, curved.x) *
                 smoothstep(0.0, 0.05, curved.y) *
                 smoothstep(1.0, 0.95, curved.x) *

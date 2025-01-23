@@ -20,17 +20,42 @@ pub struct Renderer {
     time: f32,
 }
 
+#[derive(Copy, Clone)]
+pub enum Shader {
+    BASE,
+    CRT,
+    GB,
+    HUE,
+    THREED,
+}
+
+pub const SHADER_LIST: [Shader; 5] = [
+    Shader::BASE,
+    Shader::CRT,
+    Shader::GB,
+    Shader::HUE,
+    Shader::THREED,
+];
+
 impl Renderer {
     pub fn new(
         pixels: &Pixels,
         width: u32,
         height: u32,
-        shader_file: &str,
+        shader: Shader,
+        b_width: u32,
+        b_height: u32,
     ) -> Result<Self, TextureError> {
         let device = pixels.device();
         let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("shaders/gb.wgsl").into()),
+            source: match shader {
+                Shader::BASE => wgpu::ShaderSource::Wgsl(include_str!("shaders/base.wgsl").into()),
+                Shader::CRT => wgpu::ShaderSource::Wgsl(include_str!("shaders/crt.wgsl").into()),
+                Shader::GB => wgpu::ShaderSource::Wgsl(include_str!("shaders/gb.wgsl").into()),
+                Shader::HUE => wgpu::ShaderSource::Wgsl(include_str!("shaders/hue.wgsl").into()),
+                Shader::THREED => wgpu::ShaderSource::Wgsl(include_str!("shaders/3d.wgsl").into()),
+            },
         });
 
         // Create a texture view that will be used as input
@@ -90,7 +115,14 @@ impl Renderer {
 
         let cutout_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Cutout Region Buffer"),
-            contents: bytemuck::cast_slice(&[0.0_f32, 0.0_f32, 1.0_f32, 1.0_f32]), // Default: full screen
+            contents: bytemuck::cast_slice(&[
+                0.0_f32,
+                0.0_f32,
+                1.0_f32,
+                1.0_f32,
+                b_width as f32,
+                b_height as f32,
+            ]), // Default: full screen
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
@@ -131,7 +163,7 @@ impl Renderer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
                         min_binding_size: wgpu::BufferSize::new(
-                            std::mem::size_of::<[f32; 4]>() as u64
+                            std::mem::size_of::<[f32; 6]>() as u64
                         ),
                     },
                     count: None,
@@ -220,17 +252,26 @@ impl Renderer {
         Ok(())
     }
 
-    pub fn update(&mut self, queue: &wgpu::Queue) {
+    pub fn update(&mut self, queue: &wgpu::Queue, clip_rect: (u32, u32, u32, u32)) {
         self.time += 0.01;
         queue.write_buffer(&self.time_buffer, 0, &self.time.to_ne_bytes());
+
+        queue.write_buffer(
+            &self.cutout_buffer,
+            0,
+            bytemuck::cast_slice(&[
+                clip_rect.0 as f32 / self.width as f32,
+                clip_rect.1 as f32 / self.height as f32,
+                clip_rect.2 as f32 / self.width as f32,
+                clip_rect.3 as f32 / self.height as f32,
+            ]),
+        );
     }
 
     pub fn render(
-        &self,
+        &mut self,
         encoder: &mut wgpu::CommandEncoder,
         render_target: &wgpu::TextureView,
-        clip_rect: (u32, u32, u32, u32),
-        queue: &wgpu::Queue,
     ) {
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Renderer render pass"),
@@ -251,17 +292,6 @@ impl Renderer {
         rpass.draw(0..6, 0..1);
 
         //println!("{:?}", clip_rect.0 as f32 / self.width as f32);
-
-        queue.write_buffer(
-            &self.cutout_buffer,
-            0,
-            bytemuck::cast_slice(&[
-                clip_rect.0 as f32 / self.width as f32,
-                clip_rect.1 as f32 / self.height as f32,
-                clip_rect.2 as f32 / self.width as f32,
-                clip_rect.3 as f32 / self.height as f32,
-            ]),
-        );
     }
 
     pub fn reset(&mut self) {

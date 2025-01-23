@@ -1,5 +1,4 @@
 // Vertex shader bindings
-
 struct VertexOutput {
     @location(0) tex_coord: vec2<f32>,
     @builtin(position) position: vec4<f32>,
@@ -44,9 +43,6 @@ fn curve(uv: vec2<f32>) -> vec2<f32> {
         
         let finalUV = (distortedUV / 2.0) + vec2<f32>(0.5, 0.5);
         
-        // Distance from the center
-        let vignette = smoothstep(vec2<f32>(0.), vec2<f32>(0.7), (1.0 - abs(distortedUV)));
-
         return finalUV;
 }
 
@@ -77,8 +73,8 @@ fn fs_main(@location(0) tex_coord: vec2<f32>) -> @location(0) vec4<f32> {
     let sampled_color = textureSample(r_tex_color, r_tex_sampler, curved);
 
     let s_count = 100.;
-    let i = sin((curved.y - r_locals.time * 0.1) * s_count * tau / cutout.height);
-    let s = (i * 0.25 + 0.75);
+    let i = (curved.y - r_locals.time * 0.05) * s_count * tau / cutout.height;
+    let s = (sin(i) * 0.25 + 0.75);
     let scan = vec4<f32>(vec3<f32>(pow(s, 0.5)), 1.0);
     
     
@@ -104,7 +100,7 @@ fn fs_main(@location(0) tex_coord: vec2<f32>) -> @location(0) vec4<f32> {
     }
 
 
-    //
+    let color = vec4<f32>(sampled_color.r * (cos(i) * 0.25 + 0.75), sampled_color.g * (sin(i) * 0.25 + 0.75), sampled_color.b * (cos(i) * 0.25 + 0.75), sampled_color.a);
 
     /*let edge_fade = vec4<f32>(smoothstep(0.0, 0.05, curved.x) *
                 smoothstep(0.0, 0.05, curved.y) *
@@ -117,5 +113,5 @@ fn fs_main(@location(0) tex_coord: vec2<f32>) -> @location(0) vec4<f32> {
 
     //return vec4<f32>(sampled_color);
 
-    return vec4<f32>(sampled_color * scan * vignette(reverse(curved), 0.4)); //* edge_fade);
+    return vec4<f32>(color * scan * vignette(reverse(curved), 0.4)); //* edge_fade);
 }

@@ -3,10 +3,11 @@
 
 use controller::{Controller, ControllerEvent};
 use dirs::download_dir;
+use emulator::mbc::new;
 use error_iter::ErrorIter as _;
 use log::error;
 use pixels::{Error, Pixels, SurfaceTexture};
-use renderer::Renderer;
+use renderer::{Renderer, Shader, SHADER_LIST};
 use std::path::PathBuf;
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 use std::thread;
@@ -28,6 +29,7 @@ mod controller;
 mod emulator;
 mod player;
 mod renderer;
+mod utils;
 
 #[cfg(target_os = "macos")]
 use tao::platform::macos::WindowBuilderExtMacOS;
@@ -44,7 +46,7 @@ const HEIGHT: u32 = 144;
 fn main() -> Result<(), Error> {
     env_logger::init();
 
-    let mut event_loop_builder = EventLoopBuilder::new();
+    let mut event_loop_builder = EventLoopBuilder::<MenuEvent>::with_user_event();
 
     let menu_bar = Menu::new();
 
@@ -62,19 +64,32 @@ fn main() -> Result<(), Error> {
     }
 
     // screen init.
-    let file = file_dialog(None);
-
-    if file.is_none() {
-        panic!("No file selected");
-    }
 
     let (output_sender, output_receiver): (SyncSender<ControllerEvent>, Receiver<ControllerEvent>) =
         sync_channel(2);
     let (input_sender, input_receiver): (SyncSender<ControllerEvent>, Receiver<ControllerEvent>) =
         sync_channel(1);
 
+    let emulator_thread = thread::spawn(move || {
+        // This thread runs the emulator loop
+        let mut controller = Controller::new();
+        controller.run(output_sender, input_receiver);
+        drop(controller);
+    });
+
+    let file = file_dialog(None);
+
+    if file.is_none() {
+        panic!("No file selected");
+    }
+
     // event loop for window.
     let event_loop = { event_loop_builder.build() };
+
+    let proxy = event_loop.create_proxy();
+    muda::MenuEvent::set_event_handler(Some(move |event| {
+        proxy.send_event(event);
+    }));
 
     let window = {
         let size = LogicalSize::new((WIDTH * 2) as f64, (HEIGHT * 2) as f64);
@@ -104,30 +119,11 @@ fn main() -> Result<(), Error> {
         }
     };
 
-    let window_size = window.inner_size();
-    let mut pixels = {
-        let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
-        Pixels::new(WIDTH, HEIGHT, surface_texture).expect("Pixels object cannot be created")
-    };
-
-    let mut renderer = Renderer::new(
-        &pixels,
-        window_size.width,
-        window_size.height,
-        "shaders/crt.wgsl",
-    )
-    .unwrap();
+    let (mut pixels, mut renderer) = new_renderer(&window, None);
 
     reload(file.unwrap(), &input_sender, &mut renderer);
 
     // Start the emulator in a separate thread
-
-    let emulator_thread = thread::spawn(move || {
-        // This thread runs the emulator loop
-        let mut controller = Controller::new();
-        controller.run(output_sender, input_receiver);
-        drop(controller);
-    });
 
     // MENU
 
@@ -175,6 +171,17 @@ fn main() -> Result<(), Error> {
         }),
     );
 
+    let shader_switch = MenuItem::with_id(
+        "shader",
+        "Switch Shader",
+        true,
+        Some(if cfg!(target_os = "macos") {
+            Accelerator::new(Some(Modifiers::SUPER), Code::KeyS)
+        } else {
+            Accelerator::new(Some(Modifiers::CONTROL), Code::KeyS)
+        }),
+    );
+
     #[cfg(target_os = "macos")]
     {
         let app_m = Submenu::new("App", true);
@@ -199,6 +206,7 @@ fn main() -> Result<(), Error> {
     file_m.append_items(&[&open, &config_open, &config_reload]);
 
     window_m.append_items(&[
+        &shader_switch,
         &PredefinedMenuItem::minimize(None),
         &PredefinedMenuItem::maximize(None),
         &PredefinedMenuItem::close_window(Some("Close")),
@@ -226,6 +234,8 @@ fn main() -> Result<(), Error> {
 
     let menu_channel = MenuEvent::receiver();
 
+    let mut shader = 0;
+
     event_loop.run(move |event, event_loop, control_flow| {
         //*control_flow = ControlFlow::Poll;
 
@@ -242,14 +252,9 @@ fn main() -> Result<(), Error> {
                             .scaling_renderer
                             .render(encoder, renderer.texture_view());
 
-                        renderer.update(&context.queue);
+                        renderer.update(&context.queue, context.scaling_renderer.clip_rect());
 
-                        renderer.render(
-                            encoder,
-                            render_target,
-                            context.scaling_renderer.clip_rect(),
-                            (&context.queue),
-                        );
+                        renderer.render(encoder, render_target);
 
                         Ok(())
                     });
@@ -281,9 +286,14 @@ fn main() -> Result<(), Error> {
                 WindowEvent::KeyboardInput { event: input, .. } => {
                     match (input.state, input.logical_key) {
                         (ElementState::Pressed, key) => match to_text(key) {
-                            Some(key) => input_sender
-                                .send(ControllerEvent::KeyDown(key))
-                                .expect("ControllerEvent KeyDown cannot be sent"),
+                            Some(key) => {
+                                //let x = SHADER_LIST[shader % SHADER_LIST.len()];
+                                //(pixels, renderer) = new_renderer(&window, x);
+                                //shader += 1;
+                                input_sender
+                                    .send(ControllerEvent::KeyDown(key))
+                                    .expect("ControllerEvent KeyDown cannot be sent")
+                            }
                             None => (),
                         },
                         (ElementState::Released, key) => match to_text(key) {
@@ -340,34 +350,37 @@ fn main() -> Result<(), Error> {
             /*Event::Opened { urls } => match urls {
                 _ => opener::open(&config_path).unwrap(), //println!("{:?}", urls),
             },*/
-            _ => (),
-        }
-
-        if let Ok(event) = menu_channel.try_recv() {
-            if event.id == open.id() {
-                let file = file_dialog(None);
-                match file {
-                    Some(f) => {
-                        reload(f, &input_sender, &mut renderer);
+            Event::UserEvent((event)) => {
+                if event.id == open.id() {
+                    let file = file_dialog(None);
+                    match file {
+                        Some(f) => {
+                            reload(f, &input_sender, &mut renderer);
+                        }
+                        None => (),
                     }
-                    None => (),
+                } else if event.id == config_open.id() {
+                    input_sender
+                        .send(ControllerEvent::OpenConfig)
+                        .expect("ControllerEvent OpenConfig cannot be sent");
+                } else if event.id == quit.id() {
+                    input_sender
+                        .send(ControllerEvent::Exit)
+                        .expect("ControllerEvent Exit cannot be sent");
+                    while !emulator_thread.is_finished() {
+                        *control_flow = ControlFlow::Exit
+                    }
+                } else if event.id == config_reload.id() {
+                    input_sender
+                        .send(ControllerEvent::LoadConfig)
+                        .expect("ControllerEvent LoadConfig cannot be sent");
+                } else if event.id == shader_switch.id() {
+                    shader += 1;
+                    (pixels, renderer) =
+                        new_renderer(&window, Some(SHADER_LIST[shader % SHADER_LIST.len()]));
                 }
-            } else if event.id == config_open.id() {
-                input_sender
-                    .send(ControllerEvent::OpenConfig)
-                    .expect("ControllerEvent OpenConfig cannot be sent");
-            } else if event.id == quit.id() {
-                input_sender
-                    .send(ControllerEvent::Exit)
-                    .expect("ControllerEvent Exit cannot be sent");
-                while !emulator_thread.is_finished() {
-                    *control_flow = ControlFlow::Exit
-                }
-            } else if event.id == config_reload.id() {
-                input_sender
-                    .send(ControllerEvent::LoadConfig)
-                    .expect("ControllerEvent LoadConfig cannot be sent");
             }
+            _ => (),
         } //println!("{event:?}");
     });
 }
@@ -405,9 +418,32 @@ pub fn reload(file: PathBuf, sender: &SyncSender<ControllerEvent>, renderer: &mu
     sender
         .send(ControllerEvent::New(file))
         .expect("ControllerEvent New cannot be sent");
-
-    renderer.reset();
     //sender.send(ControllerEvent::LoadConfig()).unwrap();
+}
+
+pub fn new_renderer(window: &Window, shader: Option<Shader>) -> (Pixels, Renderer) {
+    let window_size = window.inner_size();
+    let pixels = {
+        let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
+        Pixels::new(WIDTH, HEIGHT, surface_texture).expect("Pixels object cannot be created")
+    };
+
+    let shader = match shader {
+        Some(n) => n,
+        None => Shader::BASE,
+    };
+
+    let renderer = Renderer::new(
+        &pixels,
+        window_size.width,
+        window_size.height,
+        shader,
+        WIDTH,
+        HEIGHT,
+    )
+    .unwrap();
+
+    return (pixels, renderer);
 }
 
 pub fn to_text<'a>(key: Key<'a>) -> Option<String> {

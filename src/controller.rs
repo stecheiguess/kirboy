@@ -15,6 +15,7 @@ pub enum ControllerEvent {
     LoadConfig,
     OpenConfig,
     Title(String),
+    Save,
 }
 
 pub struct Controller {
@@ -115,6 +116,10 @@ impl Controller {
                     Config::open();
                 }
 
+                Ok(ControllerEvent::Save) => {
+                    println!("{}", self.config.save)
+                }
+
                 Ok(ControllerEvent::Exit) => {
                     // Exits Emulator
                     break;
@@ -124,19 +129,25 @@ impl Controller {
             }
 
             // Emulator update and draw logic
-            if self.emulator.as_mut().unwrap().updated() {
-                let draw_data = self.draw();
 
-                match sender.try_send(ControllerEvent::Draw(draw_data)) {
-                    Err(TrySendError::Disconnected(_)) => {
-                        break;
+            match self.emulator {
+                Some(_) => {
+                    if self.emulator.as_mut().unwrap().updated() {
+                        let draw_data = self.draw();
+
+                        match sender.try_send(ControllerEvent::Draw(draw_data)) {
+                            Err(TrySendError::Disconnected(_)) => {
+                                break;
+                            }
+                            Err(_) => (),
+                            Ok(_) => (),
+                        }
                     }
-                    Err(_) => (),
-                    Ok(_) => (),
-                }
-            }
 
-            self.emulator.as_mut().unwrap().step();
+                    self.emulator.as_mut().unwrap().step();
+                }
+                None => continue,
+            }
         }
     }
 }
