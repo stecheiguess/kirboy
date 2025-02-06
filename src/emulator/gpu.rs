@@ -465,9 +465,8 @@ impl GPU {
             return;
         }
 
-        // add cycle to clock as t cycles
         self.clock += (m_cycles * 4) as u16;
-
+        // add cycle to clock as t cycles
         match self.mode {
             // mode 2
             Mode::OAMScan => {

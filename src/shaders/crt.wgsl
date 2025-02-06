@@ -81,7 +81,7 @@ fn fs_main(@location(0) tex_coord: vec2<f32>) -> @location(0) vec4<f32> {
     
 
 
-    if (tex_coord.x < (0.1) && tex_coord.y < (0.1)) {
+    /*if (tex_coord.x < (0.1) && tex_coord.y < (0.1)) {
         return vec4<f32>(0., 255., 0., 1.);
     }
 
@@ -91,12 +91,12 @@ fn fs_main(@location(0) tex_coord: vec2<f32>) -> @location(0) vec4<f32> {
 
     if (tex_coord.x > (0.9) && tex_coord.y > (0.9)) {
         return vec4<f32>(0., 0., 255., 1.);
-    }
+    }*/
 
     if (curved.x < 0.0 || curved.x > 1.0 ||
         curved.y < 0.0 || curved.y > 1.0) {
         // Return black for out-of-bounds pixels
-        return vec4<f32>(0., 0., 0., 0.);
+        discard;
     }
 
 

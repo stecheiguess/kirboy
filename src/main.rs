@@ -6,6 +6,7 @@ use dirs::download_dir;
 use emulator::mbc::new;
 use error_iter::ErrorIter as _;
 use log::error;
+use muda::CheckMenuItem;
 use pixels::{Error, Pixels, SurfaceTexture};
 use renderer::{Renderer, Shader, SHADER_LIST};
 use std::path::PathBuf;
@@ -121,7 +122,7 @@ fn main() -> Result<(), Error> {
 
     let (mut pixels, mut renderer) = new_renderer(&window, None);
 
-    reload(file.unwrap(), &input_sender, &mut renderer);
+    reload(file.unwrap(), &input_sender);
 
     // Start the emulator in a separate thread
 
@@ -202,6 +203,7 @@ fn main() -> Result<(), Error> {
 
     let file_m = Submenu::new("&File", true);
     let window_m = Submenu::new("&Window", true);
+    let shader_m = Submenu::new("&Shaders", true);
 
     file_m.append_items(&[&open, &config_open, &config_reload]);
 
@@ -214,7 +216,7 @@ fn main() -> Result<(), Error> {
         &PredefinedMenuItem::bring_all_to_front(None),
     ]);
 
-    menu_bar.append_items(&[&file_m, &window_m]);
+    menu_bar.append_items(&[&file_m, &window_m, &shader_m]);
 
     #[cfg(target_os = "windows")]
     {
@@ -231,8 +233,6 @@ fn main() -> Result<(), Error> {
         menu_bar.init_for_nsapp();
         window_m.set_as_windows_menu_for_nsapp();
     }
-
-    let menu_channel = MenuEvent::receiver();
 
     let mut shader = 0;
 
@@ -342,7 +342,7 @@ fn main() -> Result<(), Error> {
                     }
                 }
                 WindowEvent::DroppedFile(file) => {
-                    reload(file, &input_sender, &mut renderer);
+                    reload(file, &input_sender);
                 }
                 _ => (),
             },
@@ -355,7 +355,7 @@ fn main() -> Result<(), Error> {
                     let file = file_dialog(None);
                     match file {
                         Some(f) => {
-                            reload(f, &input_sender, &mut renderer);
+                            reload(f, &input_sender);
                         }
                         None => (),
                     }
@@ -410,7 +410,7 @@ fn file_dialog(path: Option<PathBuf>) -> Option<PathBuf> {
     file
 }
 
-pub fn reload(file: PathBuf, sender: &SyncSender<ControllerEvent>, renderer: &mut Renderer) {
+pub fn reload(file: PathBuf, sender: &SyncSender<ControllerEvent>) {
     // Send the emulator instance to the event loop
 
     //sender.send(ControllerEvent::LoadConfig(config)).unwrap();

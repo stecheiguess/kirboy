@@ -135,13 +135,18 @@ impl MBC for MBC3 {
 
     fn load_ram(&mut self, data: Vec<u8>) {
         if self.battery {
-            self.ram = data;
+            self.rtc.load(data[0..8].to_vec());
+            self.ram = data[8..].to_vec();
         }
     }
 
     fn save_ram(&self) -> Option<Vec<u8>> {
         if self.battery {
-            Some(self.ram.clone())
+            Some({
+                let mut t = self.rtc.save();
+                t.append(&mut self.ram.clone());
+                t
+            })
         } else {
             None
         }
@@ -188,6 +193,7 @@ impl RTC {
     }
 
     pub fn write(&mut self, value: u8) {
+        self.calculate();
         let mask = match self.address {
             0 | 1 => 0x3F,
             2 => 0x1F,
@@ -199,6 +205,7 @@ impl RTC {
 
         self.latch[self.address] = new_value;
         self.ram[self.address] = new_value;
+        self.start = self.check();
     }
 
     pub fn select(&mut self, value: u8) {
@@ -206,6 +213,10 @@ impl RTC {
     }
     pub fn calculate(&mut self) {
         if self.ram[4] & 0x40 == 0x40 {
+            return;
+        }
+
+        if self.check() == self.start {
             return;
         }
 
@@ -226,7 +237,24 @@ impl RTC {
 
         if days >= 512 {
             self.ram[4] |= 0x80; // carry
+            self.start = self.check()
         }
+    }
+
+    pub fn check(&self) -> u64 {
+        let mut difference = match time::SystemTime::now().duration_since(time::UNIX_EPOCH) {
+            Ok(t) => t.as_secs(),
+            Err(_) => {
+                panic!("System clock is set to a time before the unix epoch (1970-01-01)")
+            }
+        };
+        difference -= self.ram[0] as u64;
+        difference -= (self.ram[1] as u64) * 60;
+        difference -= (self.ram[2] as u64) * 3600;
+        let days = ((self.ram[4] as u64 & 0x1) << 8) | (self.ram[3] as u64);
+        difference -= days * 3600 * 24;
+
+        return difference;
     }
 
     pub fn latch(&mut self) {

@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, fs, io::read_to_string};
 
 use pixels::{
     check_texture_size,
@@ -27,14 +27,41 @@ pub enum Shader {
     GB,
     HUE,
     THREED,
+    INVERT,
 }
 
-pub const SHADER_LIST: [Shader; 5] = [
+impl Shader {
+    pub fn file(shader: Shader) -> &'static str {
+        match shader {
+            Shader::BASE => include_str!("shaders/base.wgsl"),
+            Shader::CRT => include_str!("shaders/crt.wgsl"),
+            Shader::GB => include_str!("shaders/gb.wgsl"),
+            Shader::HUE => include_str!("shaders/hue.wgsl"),
+            Shader::THREED => include_str!("shaders/3d.wgsl"),
+            Shader::INVERT => include_str!("shaders/invert.wgsl"),
+        }
+    }
+
+    pub fn name(shader: Shader) -> String {
+        match shader {
+            Shader::BASE => "base",
+            Shader::CRT => "crt",
+            Shader::GB => "gb",
+            Shader::HUE => "hue",
+            Shader::THREED => "3d",
+            Shader::INVERT => "invert",
+        }
+        .to_owned()
+    }
+}
+
+pub const SHADER_LIST: [Shader; 6] = [
     Shader::BASE,
     Shader::CRT,
     Shader::GB,
     Shader::HUE,
     Shader::THREED,
+    Shader::INVERT,
 ];
 
 impl Renderer {
@@ -49,13 +76,7 @@ impl Renderer {
         let device = pixels.device();
         let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
-            source: match shader {
-                Shader::BASE => wgpu::ShaderSource::Wgsl(include_str!("shaders/base.wgsl").into()),
-                Shader::CRT => wgpu::ShaderSource::Wgsl(include_str!("shaders/crt.wgsl").into()),
-                Shader::GB => wgpu::ShaderSource::Wgsl(include_str!("shaders/gb.wgsl").into()),
-                Shader::HUE => wgpu::ShaderSource::Wgsl(include_str!("shaders/hue.wgsl").into()),
-                Shader::THREED => wgpu::ShaderSource::Wgsl(include_str!("shaders/3d.wgsl").into()),
-            },
+            source: wgpu::ShaderSource::Wgsl(Shader::file(shader).into()),
         });
 
         // Create a texture view that will be used as input
@@ -90,7 +111,6 @@ impl Renderer {
             [2.0, 2.0, 2.0, 2.0],
         ];
         let vertex_data_slice = bytemuck::cast_slice(&vertex_data);
-        println!("{:?}", vertex_data_slice);
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Renderer vertex buffer"),
             contents: vertex_data_slice,

@@ -5,22 +5,13 @@ struct VertexOutput {
     @builtin(position) position: vec4<f32>,
 }
 
-struct CutoutRegion {
-    x: f32,      // X offset (normalized)
-    y: f32,       // Y offset (normalized)
-    width: f32,   // Width (normalized)
-    height: f32,  // Height (normalized)
-};
-
-@group(0) @binding(3) var<uniform> cutout: CutoutRegion;
-
 @vertex
 fn vs_main(
     @location(0) position: vec2<f32>,
 ) -> VertexOutput {
     var out: VertexOutput;
     out.tex_coord = fma(position, vec2<f32>(0.5, -0.5), vec2<f32>(0.5, 0.5));
-    out.position = vec4<f32>((position * vec2<f32>(cutout.width, cutout.height)), 0.0, 1.0);
+    out.position = vec4<f32>(position, 0.0, 1.0);
     return out;
 }
 
@@ -30,15 +21,11 @@ fn vs_main(
 @group(0) @binding(1) var tex_sampler: sampler;
 
 
-fn remap(uv: vec2<f32>) -> vec2<f32> {
-    return uv * vec2<f32>(cutout.width, cutout.height) + vec2<f32>(cutout.x, cutout.y);
-}
-
 
 @fragment
 fn fs_main(@location(0) tex_coord: vec2<f32>) -> @location(0) vec4<f32> {
 
-    return textureSample(tex_color, tex_sampler, remap(tex_coord));
+    return textureSample(tex_color, tex_sampler, tex_coord);
 
 }
 

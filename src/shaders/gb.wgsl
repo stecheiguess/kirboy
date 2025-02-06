@@ -64,9 +64,12 @@ fn fs_main(@location(0) tex_coord: vec2<f32>) -> @location(0) vec4<f32> {
     // Amplify the green channel and reduce red/blue
 
     let avg = (color.r + color.g + color.b) / 3.;
-    let filter_color =  vec3<f32>(0.773, 0.980, 0.145);
+    let filterx = vec3<f32>(0.3339, 0.3731, 0.0);
+    let filter_color =  vec3<f32>(0.3039, 0.3431, 0.0);
+    let filter_color2 = vec3<f32>(0.0263, 0.1063, 0.0);
 
-    let filter_param = 0.2;
+
+
 
     let pixel_coord = vec2<f32>(
         tex_coord.x * cutout.b_width,
@@ -91,9 +94,9 @@ fn fs_main(@location(0) tex_coord: vec2<f32>) -> @location(0) vec4<f32> {
     // Use smoothstep to adjust alpha based on distance from the center
     //let alpha = 1.0 - smoothstep(0.0, one_over_root_two, distance);
 
-    let filtered = vec3<f32>(avg * 0.4 + 0.2) * filter_color;
+    let filtered = vec3<f32>(avg * 0.5 + 0.25) * filterx;
 
-    let shade = vec4<f32>((filtered - 0.15), smoothstep(0., 0.9, (1. - distance)));
+    let shade = vec4<f32>((filterx), smoothstep(0., 0.9, (1. - distance)));
 
     
     //let bright = (vec4<f32>(0.851, 0.961, 0.145, alpha));
@@ -102,7 +105,11 @@ fn fs_main(@location(0) tex_coord: vec2<f32>) -> @location(0) vec4<f32> {
 
 
     // Return the filtered color with alpha unchanged
-    return mix(vec4<f32>(filtered, 1.), shade, shade.a);
+
+
+    return mix(vec4<f32>(mix(filter_color2, filter_color, avg)  , 1.), shade,  1. - shade.a);
+    
+    
 }
 
 
