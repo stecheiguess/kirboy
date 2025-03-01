@@ -2,35 +2,32 @@ use crate::emulator::{mbc::MBC, mmu::MMU, registers::Registers};
 
 // cpu
 
+// enum for the interrupt instruction handling
+enum Interrupt {
+    OFF,
+    EXECUTE,
+    QUEUED,
+}
+// TODO: maybe fix up the match statement and register class, use hashmap instead and opcode Parsing?
+
 pub struct CPU {
-    pub registers: Registers,
-    pub mmu: MMU,
-    pub ime: bool,
-    pub halted: bool,
-    di: u8,
-    ei: u8,
+    pub registers: Registers, // Register Class
+    pub mmu: MMU,             // MMU Class for all the components.
+    pub ime: bool,            // The IME Flag.
+    pub halted: bool,         // Sees if the CPU is halted.
+    di: Interrupt,            // disable interrupt
+    ei: Interrupt,            // enable interrrupt.
 }
 
 impl CPU {
     pub fn new(cartridge: Box<dyn MBC>, boot: bool) -> Self {
-        if boot {
-            Self {
-                registers: Registers::new(),
-                mmu: MMU::new(cartridge),
-                ime: false,
-                halted: false,
-                di: 0,
-                ei: 0,
-            }
-        } else {
-            Self {
-                registers: Registers::init(),
-                mmu: MMU::init(cartridge),
-                ime: false,
-                halted: false,
-                di: 0,
-                ei: 0,
-            }
+        Self {
+            registers: Registers::init(),
+            mmu: MMU::init(cartridge),
+            ime: false,
+            halted: false,
+            di: Interrupt::OFF,
+            ei: Interrupt::OFF,
         }
     }
 
@@ -72,22 +69,23 @@ impl CPU {
     }
 
     fn update_interrupt(&mut self) {
+        //account for delay of DI and EI.
         self.di = match self.di {
-            2 => 1,
-            1 => {
+            Interrupt::QUEUED => Interrupt::EXECUTE,
+            Interrupt::EXECUTE => {
                 self.ime = false;
-                0
+                Interrupt::OFF
             }
-            _ => 0,
+            Interrupt::OFF => Interrupt::OFF,
         };
 
         self.ei = match self.ei {
-            2 => 1,
-            1 => {
+            Interrupt::QUEUED => Interrupt::EXECUTE,
+            Interrupt::EXECUTE => {
                 self.ime = true;
-                0
+                Interrupt::OFF
             }
-            _ => 0,
+            Interrupt::OFF => Interrupt::OFF,
         };
     }
 
@@ -1349,18 +1347,18 @@ impl CPU {
 
             // interrupts
             0xf3 => {
-                self.di = 2;
+                self.di = Interrupt::QUEUED;
                 1
             }
 
             0xfb => {
-                self.ei = 2;
+                self.ei = Interrupt::QUEUED;
                 1
             }
 
             0xd9 => {
                 self.registers.pc = self.pop();
-                self.ei = 1;
+                self.ei = Interrupt::EXECUTE;
                 4
             }
 

@@ -172,6 +172,7 @@ impl RTC {
         }
     }
 
+    //loads the starting time stamp from the save file.
     pub fn load(&mut self, saved_start: Vec<u8>) {
         self.start = {
             let mut b: [u8; 8] = Default::default();
@@ -180,6 +181,7 @@ impl RTC {
         };
     }
 
+    // returns the new starting time stamp for the next initialization of the save file.
     pub fn save(&self) -> Vec<u8> {
         if self.enabled {
             self.start.to_be_bytes().to_vec()
@@ -211,6 +213,8 @@ impl RTC {
     pub fn select(&mut self, value: u8) {
         self.address = value as usize & 0x7;
     }
+
+    // calculates the time elapsed into
     pub fn calculate(&mut self) {
         if self.ram[4] & 0x40 == 0x40 {
             return;
@@ -257,6 +261,7 @@ impl RTC {
         return difference;
     }
 
+    // saves the new calculated state into latch.
     pub fn latch(&mut self) {
         self.calculate();
         self.latch.clone_from_slice(&self.ram);

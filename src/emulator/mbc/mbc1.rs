@@ -36,6 +36,7 @@ impl MBC1 {
         }
     }
 
+    // function for zero bank calculation
     fn zero_bank(&self) -> usize {
         match self.rom_banks {
             0..=32 => 0,
@@ -47,6 +48,7 @@ impl MBC1 {
         }
     }
 
+    // function for high bank calculation
     fn high_bank(&self) -> usize {
         match self.rom_banks {
             0..=32 => (self.rom_bank & 0x1f),
@@ -147,7 +149,6 @@ impl MBC for MBC1 {
                 self.mode = (value & 0x01) == 1;
             }
 
-            // mode switch {}
             _ => {}
         }
     }

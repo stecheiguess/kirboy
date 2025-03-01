@@ -12,6 +12,8 @@ pub struct Registers {
     pub sp: u16,
 }
 
+// TODO: Rewrite the entire class. Use Enums, for more self describing code, instead of an OOP approach, as I have enough of it in the code honestly.
+
 impl Registers {
     pub fn new() -> Self {
         Self {

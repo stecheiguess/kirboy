@@ -25,6 +25,7 @@ impl MMU {
         }
     }
 
+    // initializes gameboy state without needing boot rom.
     pub fn init(cartridge: Box<dyn MBC>) -> Self {
         let mut mmu = MMU::new(cartridge);
         mmu.write_byte(0x80, 0xff10);
