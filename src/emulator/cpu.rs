@@ -1,4 +1,6 @@
-use crate::emulator::{mbc::MBC, mmu::MMU, registers::Register, registers::Registers};
+use crate::emulator::{
+    mbc::MBC, mmu::MMU, registers::DoubleRegister, registers::Register, registers::Registers,
+};
 
 // cpu
 
@@ -8,7 +10,6 @@ enum Interrupt {
     EXECUTE,
     QUEUED,
 }
-// TODO: maybe fix up the match statement and register class, use hashmap instead and opcode Parsing?
 
 pub struct CPU {
     pub registers: Registers, // Register Class
@@ -116,24 +117,18 @@ impl CPU {
         //println!("Instruction {:2X}", opcode);
         //println!("{:?}", self.registers);
         match opcode {
-            0x00 => 1,
-            0x10 => 1,
+            0x00 | 0x10 => 1,
 
             // ld 16 bit
-            0x01 | 0x11 | 0x21 => {
+            0x01 | 0x11 | 0x21 | 0x31 => {
                 let i = (opcode >> 4) & 0x03;
                 let word = self.fetch_word();
-                self.set_rg_16(i, word);
-                3
-            }
-
-            0x31 => {
-                self.sp = self.fetch_word();
+                self.set_rg_16(i, opcode, word);
                 3
             }
 
             0xf9 => {
-                self.sp = self.registers.get_16((Register::H, Register::L));
+                self.sp = self.registers.get_16(DoubleRegister::HL);
                 2
             }
 
@@ -141,7 +136,7 @@ impl CPU {
             0x02 => {
                 self.mmu.write_byte(
                     self.registers.get(Register::A),
-                    self.registers.get_16((Register::B, Register::C)),
+                    self.registers.get_16(DoubleRegister::BC),
                 );
                 2
             }
@@ -149,35 +144,30 @@ impl CPU {
             0x12 => {
                 self.mmu.write_byte(
                     self.registers.get(Register::A),
-                    self.registers.get_16((Register::D, Register::E)),
+                    self.registers.get_16(DoubleRegister::DE),
                 );
                 2
             }
 
             0x22 => {
-                let v = self.registers.get_16((Register::H, Register::L));
+                let v = self.registers.get_16(DoubleRegister::HL);
                 self.mmu.write_byte(self.registers.get(Register::A), v);
-                self.registers.set_16((Register::H, Register::L), v + 1);
+                self.registers.set_16(DoubleRegister::HL, v + 1);
                 2
             }
 
             0x32 => {
-                let v = self.registers.get_16((Register::H, Register::L));
+                let v = self.registers.get_16(DoubleRegister::HL);
                 self.mmu.write_byte(self.registers.get(Register::A), v);
-                self.registers.set_16((Register::H, Register::L), v - 1);
+                self.registers.set_16(DoubleRegister::HL, v - 1);
 
                 2
             }
 
             // add 16 bit
-            0x09 | 0x19 | 0x29 => {
+            0x09 | 0x19 | 0x29 | 0x39 => {
                 let i = (opcode >> 4) & 0x03;
-                self.add16(self.get_rg_16(i));
-                2
-            }
-
-            0x39 => {
-                self.add16(self.sp);
+                self.add16(self.get_rg_16(i, opcode));
                 2
             }
 
@@ -187,145 +177,53 @@ impl CPU {
             }
             0xf8 => {
                 let v = self.add16e(self.sp);
-                self.registers.set_16((Register::H, Register::L), v);
+                self.registers.set_16(DoubleRegister::HL, v);
                 3
             }
 
             // inc 16
-            0x03 | 0x13 | 0x23 => {
+            0x03 | 0x13 | 0x23 | 0x33 => {
                 let i = (opcode >> 4) & 0x03;
-                self.set_rg_16(i, self.get_rg_16(i).wrapping_add(1));
-                2
-            }
-
-            0x33 => {
-                self.sp = self.sp.wrapping_add(1);
+                self.set_rg_16(i, opcode, self.get_rg_16(i, opcode).wrapping_add(1));
                 2
             }
 
             // dec 16
-            0x0b | 0x1b | 0x2b => {
+            0x0b | 0x1b | 0x2b | 0x3b => {
                 let i = (opcode >> 4) & 0x03;
-                self.set_rg_16(i, self.get_rg_16(i).wrapping_sub(1));
-                2
-            }
-
-            0x3b => {
-                self.sp = self.sp.wrapping_sub(1);
+                self.set_rg_16(i, opcode, self.get_rg_16(i, opcode).wrapping_sub(1));
                 2
             }
 
             // inc
-            0x04 => {
-                self.inc(0);
-                1
-            }
-            0x14 => {
-                self.inc(2);
-                1
-            }
-            0x24 => {
-                self.inc(4);
-                1
-            }
-            0x34 => {
-                self.inc(6);
-                3
-            }
-
-            0x0c => {
-                self.inc(1);
-                1
-            }
-            0x1c => {
-                self.inc(3);
-                1
-            }
-            0x2c => {
-                self.inc(5);
-                1
-            }
-            0x3c => {
-                self.inc(7);
-                1
+            0x04 | 0x14 | 0x24 | 0x34 | 0x0c | 0x1c | 0x2c | 0x3c => {
+                let i = (opcode >> 3) & 0x7;
+                self.inc(i);
+                match i {
+                    6 => 3,
+                    _ => 1,
+                }
             }
 
             // dec
-            0x05 => {
-                self.dec(0);
-                1
-            }
-            0x15 => {
-                self.dec(2);
-                1
-            }
-            0x25 => {
-                self.dec(4);
-                1
-            }
-            0x35 => {
-                self.dec(6);
-                3
-            }
-
-            0x0d => {
-                self.dec(1);
-                1
-            }
-            0x1d => {
-                self.dec(3);
-                1
-            }
-            0x2d => {
-                self.dec(5);
-                1
-            }
-            0x3d => {
-                self.dec(7);
-                1
+            0x05 | 0x15 | 0x25 | 0x35 | 0x0d | 0x1d | 0x2d | 0x3d => {
+                let i = (opcode >> 3) & 0x7;
+                self.dec(i);
+                match i {
+                    6 => 3,
+                    _ => 1,
+                }
             }
 
             //ld d8
-            0x06 => {
+            0x06 | 0x16 | 0x26 | 0x36 | 0x0e | 0x1e | 0x2e | 0x3e => {
+                let i = (opcode >> 3) & 0x7;
                 let v = self.fetch();
-                self.set_rg(0, v);
-                2
-            }
-            0x16 => {
-                let v = self.fetch();
-                self.set_rg(2, v);
-                2
-            }
-            0x26 => {
-                let v = self.fetch();
-                self.set_rg(4, v);
-                2
-            }
-            0x36 => {
-                let v = self.fetch();
-                self.set_rg(6, v);
-                3
-            }
-
-            0x0e => {
-                let v = self.fetch();
-                self.set_rg(1, v);
-                2
-            }
-            0x1e => {
-                let v = self.fetch();
-                self.set_rg(3, v);
-                2
-            }
-            0x2e => {
-                let v = self.fetch();
-                self.set_rg(5, v);
-                2
-            }
-            0x3e => {
-                let v = self.fetch();
-                self.set_rg(7, v);
-                2
+                self.set_rg(i, v);
+                match i {
+                    6 => 3,
+                    _ => 2,
+                }
             }
 
             // halted
@@ -335,20 +233,16 @@ impl CPU {
             }
 
             // LD
-            0x70..=0x77 => {
-                let from = opcode & 0x07;
-                let dest = (opcode >> 3) & 0x07;
-                self.set_rg(dest, self.get_rg(from));
-                2
-            }
-
             0x40..=0x7f => {
                 let from = opcode & 0x07;
                 let dest = (opcode >> 3) & 0x07;
                 self.set_rg(dest, self.get_rg(from));
-                match from {
+                match dest {
                     6 => 2,
-                    _ => 1,
+                    _ => match from {
+                        6 => 2,
+                        _ => 1,
+                    },
                 }
             }
 
@@ -356,7 +250,7 @@ impl CPU {
                 self.registers.set(
                     Register::A,
                     self.mmu
-                        .read_byte(self.registers.get_16((Register::B, Register::C))),
+                        .read_byte(self.registers.get_16(DoubleRegister::BC)),
                 );
 
                 2
@@ -366,171 +260,53 @@ impl CPU {
                 self.registers.set(
                     Register::A,
                     self.mmu
-                        .read_byte(self.registers.get_16((Register::D, Register::E))),
+                        .read_byte(self.registers.get_16(DoubleRegister::DE)),
                 );
                 2
             }
 
             0x2a => {
-                let v = self.registers.get_16((Register::H, Register::L));
+                let v = self.registers.get_16(DoubleRegister::HL);
                 self.registers.set(Register::A, self.mmu.read_byte(v));
-                self.registers.set_16((Register::H, Register::L), v + 1);
+                self.registers.set_16(DoubleRegister::HL, v + 1);
                 2
             }
 
             0x3a => {
-                let v = self.registers.get_16((Register::H, Register::L));
+                let v = self.registers.get_16(DoubleRegister::HL);
                 self.registers.set(Register::A, self.mmu.read_byte(v));
-                self.registers.set_16((Register::H, Register::L), v - 1);
+                self.registers.set_16(DoubleRegister::HL, v - 1);
                 2
             }
 
-            // add
-            0x86 => {
+            // operations.
+            0x80..=0xbf => {
                 let register_index = opcode & 0x07;
-                self.add(self.get_rg(register_index));
+                let operation_index = (opcode >> 3) & 0x07;
+
+                // assigns the operation as a first class object
+                let operation = self.get_operation(operation_index);
+
+                // calls the operation
+                operation(self, self.get_rg(register_index));
+
+                match register_index {
+                    6 => 2,
+                    _ => 1,
+                }
+            }
+
+            // a, n8
+            0xc6 | 0xd6 | 0xe6 | 0xf6 | 0xce | 0xde | 0xee | 0xfe => {
+                let byte = self.fetch();
+                let i = (opcode >> 3) & 0x7;
+                let operation = self.get_operation(i);
+                operation(self, byte);
                 2
-            }
-
-            0x80..=0x87 => {
-                let register_index = opcode & 0x07;
-                self.add(self.get_rg(register_index));
-                1
-            }
-            // add carry
-            0x8e => {
-                let register_index = opcode & 0x07;
-                self.adc(self.get_rg(register_index));
-                2
-            }
-
-            0x88..=0x8f => {
-                let register_index = opcode & 0x07;
-                self.adc(self.get_rg(register_index));
-                1
-            }
-            // sub
-            0x96 => {
-                let register_index = opcode & 0x07;
-                self.sub(self.get_rg(register_index));
-                2
-            }
-
-            0x90..=0x97 => {
-                let register_index = opcode & 0x07;
-                self.sub(self.get_rg(register_index));
-                1
-            }
-
-            // sub carry
-            0x9e => {
-                let register_index = opcode & 0x07;
-                self.sbc(self.get_rg(register_index));
-                2
-            }
-
-            0x98..=0x9f => {
-                let register_index = opcode & 0x07;
-                self.sbc(self.get_rg(register_index));
-                1
-            }
-
-            // and
-            0xa6 => {
-                let register_index = opcode & 0x07;
-                self.and(self.get_rg(register_index));
-                2
-            }
-
-            0xa0..=0xa7 => {
-                let register_index = opcode & 0x07;
-                self.and(self.get_rg(register_index));
-                1
-            }
-
-            // xor
-            0xae => {
-                let register_index = opcode & 0x07;
-                self.xor(self.get_rg(register_index));
-                2
-            }
-
-            0xa8..=0xaf => {
-                let register_index = opcode & 0x07;
-                self.xor(self.get_rg(register_index));
-                1
-            }
-
-            // or
-            0xb6 => {
-                let register_index = opcode & 0x07;
-                self.or(self.get_rg(register_index));
-                2
-            }
-
-            0xb0..=0xb7 => {
-                let register_index = opcode & 0x07;
-                self.or(self.get_rg(register_index));
-                1
-            }
-
-            // cp
-            0xbe => {
-                let register_index = opcode & 0x07;
-                self.cp(self.get_rg(register_index));
-                2
-            }
-
-            0xb8..=0xbf => {
-                let register_index = opcode & 0x07;
-                self.cp(self.get_rg(register_index));
-                1
             }
 
             // CB
             0xcb => self.execute_cb(),
-
-            // a, n8
-            0xc6 => {
-                let byte = self.fetch();
-                self.add(byte);
-                2
-            }
-            0xd6 => {
-                let byte = self.fetch();
-                self.sub(byte);
-                2
-            }
-            0xe6 => {
-                let byte = self.fetch();
-                self.and(byte);
-                2
-            }
-            0xf6 => {
-                let byte = self.fetch();
-                self.or(byte);
-                2
-            }
-            0xce => {
-                let byte = self.fetch();
-                self.adc(byte);
-                2
-            }
-            0xde => {
-                let byte = self.fetch();
-                self.sbc(byte);
-                2
-            }
-            0xee => {
-                let byte = self.fetch();
-                self.xor(byte);
-                2
-            }
-            0xfe => {
-                let byte = self.fetch();
-                self.cp(byte);
-                2
-            }
 
             // random accumulator (a) stuff
             0x07 => {
@@ -667,7 +443,7 @@ impl CPU {
 
             0xc5 | 0xd5 | 0xe5 | 0xf5 => {
                 let i = (opcode >> 4) & 0x03;
-                self.push(self.get_rg_16(i));
+                self.push(self.get_rg_16(i, opcode));
                 4
             }
 
@@ -675,43 +451,14 @@ impl CPU {
             0xc1 | 0xd1 | 0xe1 | 0xf1 => {
                 let i = (opcode >> 4) & 0x03;
                 let value = self.pop();
-                self.set_rg_16(i, value);
+                self.set_rg_16(i, opcode, value);
                 3
             }
 
             // rst
-            0xc4 => {
-                if !self.registers.f.zero {
-                    self.push(self.pc + 2);
-                    self.pc = self.fetch_word();
-                    6
-                } else {
-                    self.pc = self.pc.wrapping_add(2);
-                    3
-                }
-            }
-            0xd4 => {
-                if !self.registers.f.carry {
-                    self.push(self.pc + 2);
-                    self.pc = self.fetch_word();
-                    6
-                } else {
-                    self.pc = self.pc.wrapping_add(2);
-                    3
-                }
-            }
-            0xcc => {
-                if self.registers.f.zero {
-                    self.push(self.pc + 2);
-                    self.pc = self.fetch_word();
-                    6
-                } else {
-                    self.pc = self.pc.wrapping_add(2);
-                    3
-                }
-            }
-            0xdc => {
-                if self.registers.f.carry {
+            0xc4 | 0xd4 | 0xcc | 0xdc => {
+                let i = (opcode >> 3) & 0x03;
+                if self.get_flag(i) {
                     self.push(self.pc + 2);
                     self.pc = self.fetch_word();
                     6
@@ -727,84 +474,17 @@ impl CPU {
                 6
             }
 
-            0xc7 => {
+            0xc7 | 0xd7 | 0xe7 | 0xf7 | 0xcf | 0xdf | 0xef | 0xff => {
+                let i = (opcode >> 3) & 0x7;
                 self.push(self.pc);
-                self.pc = 0x00;
-                4
-            }
-
-            0xd7 => {
-                self.push(self.pc);
-                self.pc = 0x10;
-                4
-            }
-
-            0xe7 => {
-                self.push(self.pc);
-                self.pc = 0x20;
-                4
-            }
-
-            0xf7 => {
-                self.push(self.pc);
-                self.pc = 0x30;
-                4
-            }
-
-            0xcf => {
-                self.push(self.pc);
-                self.pc = 0x08;
-                4
-            }
-
-            0xdf => {
-                self.push(self.pc);
-                self.pc = 0x18;
-                4
-            }
-
-            0xef => {
-                self.push(self.pc);
-                self.pc = 0x28;
-                4
-            }
-
-            0xff => {
-                self.push(self.pc);
-                self.pc = 0x38;
+                self.pc = (i << 3) as u16;
                 4
             }
 
             // return
-            0xc0 => {
-                if !self.registers.f.zero {
-                    self.pc = self.pop();
-                    5
-                } else {
-                    2
-                }
-            }
-
-            0xd0 => {
-                if !self.registers.f.carry {
-                    self.pc = self.pop();
-                    5
-                } else {
-                    2
-                }
-            }
-
-            0xc8 => {
-                if self.registers.f.zero {
-                    self.pc = self.pop();
-                    5
-                } else {
-                    2
-                }
-            }
-
-            0xd8 => {
-                if self.registers.f.carry {
+            0xc0 | 0xd0 | 0xc8 | 0xd8 => {
+                let i = (opcode >> 3) & 0x03;
+                if self.get_flag(i) {
                     self.pc = self.pop();
                     5
                 } else {
@@ -818,18 +498,9 @@ impl CPU {
             }
 
             // jump
-            0x20 => {
-                if !self.registers.f.zero {
-                    self.jump();
-                    3
-                } else {
-                    self.pc = self.pc.wrapping_add(1);
-                    2
-                }
-            }
-
-            0x30 => {
-                if !self.registers.f.carry {
+            0x20 | 0x30 | 0x28 | 0x38 => {
+                let i = (opcode >> 3) & 0x03;
+                if self.get_flag(i) {
                     self.jump();
                     3
                 } else {
@@ -843,23 +514,14 @@ impl CPU {
                 3
             }
 
-            0x28 => {
-                if self.registers.f.zero {
-                    self.jump();
-                    3
+            0xc2 | 0xd2 | 0xca | 0xda => {
+                let i = (opcode >> 3) & 0x03;
+                if self.get_flag(i) {
+                    self.pc = self.fetch_word();
+                    4
                 } else {
-                    self.pc = self.pc.wrapping_add(1);
-                    2
-                }
-            }
-
-            0x38 => {
-                if self.registers.f.carry {
-                    self.jump();
+                    self.pc = self.pc.wrapping_add(2);
                     3
-                } else {
-                    self.pc = self.pc.wrapping_add(1);
-                    2
                 }
             }
 
@@ -867,48 +529,9 @@ impl CPU {
                 self.pc = self.fetch_word();
                 4
             }
-            0xc2 => {
-                if !self.registers.f.zero {
-                    self.pc = self.fetch_word();
-                    4
-                } else {
-                    self.pc = self.pc.wrapping_add(2);
-                    3
-                }
-            }
-
-            0xd2 => {
-                if !self.registers.f.carry {
-                    self.pc = self.fetch_word();
-                    4
-                } else {
-                    self.pc = self.pc.wrapping_add(2);
-                    3
-                }
-            }
-
-            0xca => {
-                if self.registers.f.zero {
-                    self.pc = self.fetch_word();
-                    4
-                } else {
-                    self.pc = self.pc.wrapping_add(2);
-                    3
-                }
-            }
-
-            0xda => {
-                if self.registers.f.carry {
-                    self.pc = self.fetch_word();
-                    4
-                } else {
-                    self.pc = self.pc.wrapping_add(2);
-                    3
-                }
-            }
 
             0xe9 => {
-                self.pc = self.registers.get_16((Register::H, Register::L));
+                self.pc = self.registers.get_16(DoubleRegister::HL);
 
                 1
             }
@@ -940,11 +563,10 @@ impl CPU {
     fn execute_cb(&mut self) -> u8 {
         let opcode = self.fetch();
         //println!("CB Opcode is: {:2X}", opcode);
-
+        let register_index = opcode & 0x07;
         match opcode {
             // rlc
             0x00..=0x07 => {
-                let register_index = opcode & 0x07;
                 let v: u8 = self.rlc(self.get_rg(register_index));
                 self.set_rg(register_index, v);
                 match register_index {
@@ -955,7 +577,6 @@ impl CPU {
 
             // rrc
             0x08..=0x0f => {
-                let register_index = opcode & 0x07;
                 let v: u8 = self.rrc(self.get_rg(register_index));
                 self.set_rg(register_index, v);
                 match register_index {
@@ -966,7 +587,6 @@ impl CPU {
 
             // rl
             0x10..=0x17 => {
-                let register_index = opcode & 0x07;
                 let v: u8 = self.rl(self.get_rg(register_index));
                 self.set_rg(register_index, v);
                 match register_index {
@@ -977,7 +597,6 @@ impl CPU {
 
             // rr
             0x18..=0x1f => {
-                let register_index = opcode & 0x07;
                 let v: u8 = self.rr(self.get_rg(register_index));
                 self.set_rg(register_index, v);
                 match register_index {
@@ -988,7 +607,6 @@ impl CPU {
 
             // sla
             0x20..=0x27 => {
-                let register_index = opcode & 0x07;
                 let v: u8 = self.sla(self.get_rg(register_index));
                 self.set_rg(register_index, v);
                 match register_index {
@@ -999,7 +617,6 @@ impl CPU {
 
             // sra
             0x28..=0x2f => {
-                let register_index = opcode & 0x07;
                 let v: u8 = self.sra(self.get_rg(register_index));
                 self.set_rg(register_index, v);
                 match register_index {
@@ -1010,7 +627,6 @@ impl CPU {
 
             // swap
             0x30..=0x37 => {
-                let register_index = opcode & 0x07;
                 let v: u8 = self.swap(self.get_rg(register_index));
                 self.set_rg(register_index, v);
                 match register_index {
@@ -1021,7 +637,6 @@ impl CPU {
 
             // srl
             0x38..=0x3f => {
-                let register_index = opcode & 0x07;
                 let v: u8 = self.srl(self.get_rg(register_index));
                 self.set_rg(register_index, v);
                 match register_index {
@@ -1032,7 +647,6 @@ impl CPU {
 
             // bit
             0x40..=0x7f => {
-                let register_index = opcode & 0x07;
                 let bit = (opcode >> 3) & 0x07;
                 self.bit(bit, self.get_rg(register_index));
                 match register_index {
@@ -1043,7 +657,6 @@ impl CPU {
 
             // reset to 0
             0x80..=0xbf => {
-                let register_index = opcode & 0x07;
                 let bit = (opcode >> 3) & 0x07;
                 let v = self.res(bit, self.get_rg(register_index));
                 self.set_rg(register_index, v);
@@ -1054,7 +667,6 @@ impl CPU {
             }
             // set to 1
             0xc0..=0xff => {
-                let register_index = opcode & 0x07;
                 let bit = (opcode >> 3) & 0x07;
                 let v = self.set(bit, self.get_rg(register_index));
                 self.set_rg(register_index, v);
@@ -1071,7 +683,6 @@ impl CPU {
     // bit wise CB operations
 
     fn bit(&mut self, bit: u8, register: u8) {
-        //!("before: {}, after: {}", register, register >> bit);
         let val = (register >> bit) & 0x01;
         //println!("{}", val);
         self.registers.f.zero = val == 0;
@@ -1220,14 +831,14 @@ impl CPU {
     }
 
     fn add16(&mut self, value: u16) {
-        let word = self.registers.get_16((Register::H, Register::L));
+        let word = self.registers.get_16(DoubleRegister::HL);
         let new_value = word.wrapping_add(value);
 
         self.registers.f.subtract = false;
         self.registers.f.carry = word > 0xffff - value;
         self.registers.f.half_carry = (word & 0x0fff) + (value & 0x0fff) > 0x0fff;
 
-        self.registers.set_16((Register::H, Register::L), new_value);
+        self.registers.set_16(DoubleRegister::HL, new_value);
     }
 
     fn add16e(&mut self, register: u16) -> u16 {
@@ -1344,7 +955,7 @@ impl CPU {
         match i {
             6 => self
                 .mmu
-                .read_byte(self.registers.get_16((Register::H, Register::L))),
+                .read_byte(self.registers.get_16(DoubleRegister::HL)),
             _ => self.registers.get(Register::from_index(i)),
         }
     }
@@ -1353,31 +964,61 @@ impl CPU {
         match i {
             6 => self
                 .mmu
-                .write_byte(v, self.registers.get_16((Register::H, Register::L))),
+                .write_byte(v, self.registers.get_16(DoubleRegister::HL)),
             _ => self.registers.set(Register::from_index(i), v),
         }
     }
 
-    fn get_rg_16(&self, i: u8) -> u16 {
-        self.registers.get_16(match i {
-            0 => (Register::B, Register::C),
-            1 => (Register::D, Register::E),
-            2 => (Register::H, Register::L),
-            3 => (Register::A, Register::F),
+    fn get_rg_16(&self, i: u8, opcode: u8) -> u16 {
+        match i {
+            0 => self.registers.get_16(DoubleRegister::BC),
+            1 => self.registers.get_16(DoubleRegister::DE),
+            2 => self.registers.get_16(DoubleRegister::HL),
+            3 => match opcode {
+                0x00..=0x3f => self.sp,
+                _ => self.registers.get_16(DoubleRegister::AF),
+            },
             _ => panic!("double register index not valid."),
-        })
+        }
     }
 
-    fn set_rg_16(&mut self, i: u8, v: u16) {
-        self.registers.set_16(
-            match i {
-                0 => (Register::B, Register::C),
-                1 => (Register::D, Register::E),
-                2 => (Register::H, Register::L),
-                3 => (Register::A, Register::F),
-                _ => panic!("double register index not valid."),
+    fn set_rg_16(&mut self, i: u8, opcode: u8, v: u16) {
+        match i {
+            0 => self.registers.set_16(DoubleRegister::BC, v),
+            1 => self.registers.set_16(DoubleRegister::DE, v),
+            2 => self.registers.set_16(DoubleRegister::HL, v),
+            3 => match opcode {
+                0x00..=0x3f => {
+                    self.sp = v;
+                }
+                _ => self.registers.set_16(DoubleRegister::AF, v),
             },
-            v,
-        )
+            _ => panic!("double register index not valid."),
+        }
+    }
+
+    // returns the operation depending on the index.
+    fn get_operation(&self, i: u8) -> fn(&mut CPU, u8) {
+        match i {
+            0 => CPU::add,
+            1 => CPU::adc,
+            2 => CPU::sub,
+            3 => CPU::sbc,
+            4 => CPU::and,
+            5 => CPU::xor,
+            6 => CPU::or,
+            7 => CPU::cp,
+            _ => panic!("Operation index does not exist"),
+        }
+    }
+
+    fn get_flag(&self, i: u8) -> bool {
+        match i {
+            0 => !self.registers.f.zero,
+            1 => self.registers.f.zero,
+            2 => !self.registers.f.carry,
+            3 => self.registers.f.carry,
+            _ => panic!("Flag index does not exist"),
+        }
     }
 }

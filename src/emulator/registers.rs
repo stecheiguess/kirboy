@@ -45,6 +45,24 @@ pub enum Register {
     L,
 }
 
+pub enum DoubleRegister {
+    BC,
+    DE,
+    AF,
+    HL,
+}
+
+impl DoubleRegister {
+    pub fn to_tuple(d: DoubleRegister) -> (Register, Register) {
+        match d {
+            DoubleRegister::AF => (Register::A, Register::F),
+            DoubleRegister::BC => (Register::B, Register::C),
+            DoubleRegister::DE => (Register::D, Register::E),
+            DoubleRegister::HL => (Register::H, Register::L),
+        }
+    }
+}
+
 impl Register {
     pub fn from_index(i: u8) -> Self {
         match i {
@@ -112,10 +130,12 @@ impl Registers {
         }
     }
 
-    pub fn get_16(&self, (r1, r2): (Register, Register)) -> u16 {
+    pub fn get_16(&self, d: DoubleRegister) -> u16 {
+        let (r1, r2) = DoubleRegister::to_tuple(d);
         ((self.get(r1) as u16) << 8) | (self.get(r2) as u16)
     }
-    pub fn set_16(&mut self, (r1, r2): (Register, Register), v: u16) {
+    pub fn set_16(&mut self, d: DoubleRegister, v: u16) {
+        let (r1, r2) = DoubleRegister::to_tuple(d);
         self.set(r1, (v >> 8) as u8);
         self.set(r2, (v & 0xff) as u8)
     }
