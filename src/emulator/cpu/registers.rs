@@ -63,21 +63,6 @@ impl DoubleRegister {
     }
 }
 
-impl Register {
-    pub fn from_index(i: u8) -> Self {
-        match i {
-            0 => Register::B,
-            1 => Register::C,
-            2 => Register::D,
-            3 => Register::E,
-            4 => Register::H,
-            5 => Register::L,
-            7 => Register::A,
-            _ => panic!("index cannot be matched to a single bit register."),
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct Registers {
     data: HashMap<Register, u8>,

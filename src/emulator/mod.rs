@@ -12,11 +12,10 @@ use joypad::Input;
 
 pub mod apu;
 pub mod cpu;
-pub mod gpu;
 pub mod joypad;
 pub mod mbc;
 pub mod mmu;
-pub mod registers;
+pub mod ppu;
 pub mod timer;
 
 pub const CLOCK_FREQUENCY: u32 = 4_194_304;

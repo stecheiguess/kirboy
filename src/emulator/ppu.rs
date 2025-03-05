@@ -18,41 +18,27 @@ struct Control {
     // for DMG, bg and window display, for CGB, master priority
     enable_bg_window: bool,
 }
-
-impl std::convert::From<Control> for u8 {
-    fn from(reg: Control) -> u8 {
-        ((reg.enable_lcd as u8) << 7)
-            | ((reg.tile_map_window as u8) << 6)
-            | ((reg.enable_window as u8) << 5)
-            | ((reg.tile_area as u8) << 4)
-            | ((reg.tile_map_bg as u8) << 3)
-            | ((reg.obj_size as u8) << 2)
-            | ((reg.enable_obj as u8) << 1)
-            | (reg.enable_bg_window as u8)
+impl Control {
+    fn get(&self) -> u8 {
+        ((self.enable_lcd as u8) << 7)
+            | ((self.tile_map_window as u8) << 6)
+            | ((self.enable_window as u8) << 5)
+            | ((self.tile_area as u8) << 4)
+            | ((self.tile_map_bg as u8) << 3)
+            | ((self.obj_size as u8) << 2)
+            | ((self.enable_obj as u8) << 1)
+            | (self.enable_bg_window as u8)
     }
-}
 
-impl std::convert::From<u8> for Control {
-    fn from(byte: u8) -> Control {
-        let enable_lcd = ((byte >> 7) & 0b1) != 0;
-        let tile_map_window = ((byte >> 6) & 0b1) != 0;
-        let enable_window = ((byte >> 5) & 0b1) != 0;
-        let tile_area = ((byte >> 4) & 0b1) != 0;
-        let tile_map_bg = ((byte >> 3) & 0b1) != 0;
-        let obj_size = ((byte >> 2) & 0b1) != 0;
-        let enable_obj = ((byte >> 1) & 0b1) != 0;
-        let enable_bg_window = (byte & 0b1) != 0;
-
-        Control {
-            enable_lcd,
-            tile_map_window,
-            enable_window,
-            tile_area,
-            tile_map_bg,
-            obj_size,
-            enable_obj,
-            enable_bg_window,
-        }
+    fn set(&mut self, byte: u8) {
+        self.enable_lcd = ((byte >> 7) & 0b1) != 0;
+        self.tile_map_window = ((byte >> 6) & 0b1) != 0;
+        self.enable_window = ((byte >> 5) & 0b1) != 0;
+        self.tile_area = ((byte >> 4) & 0b1) != 0;
+        self.tile_map_bg = ((byte >> 3) & 0b1) != 0;
+        self.obj_size = ((byte >> 2) & 0b1) != 0;
+        self.enable_obj = ((byte >> 1) & 0b1) != 0;
+        self.enable_bg_window = (byte & 0b1) != 0;
     }
 }
 
@@ -64,7 +50,7 @@ enum Mode {
     VBlank = 1,
 }
 
-pub struct GPU {
+pub struct PPU {
     control: Control,
     ly: u8,
     lyc: u8,
@@ -72,15 +58,15 @@ pub struct GPU {
     scx: u8,
     winy: u8,
     winx: u8,
-    vram0: [u8; 0x800],
-    vram1: [u8; 0x800],
-    vram2: [u8; 0x800],
-    map0: [u8; 0x400],
-    map1: [u8; 0x400],
+    bank_0: [u8; 0x800],
+    bank_1: [u8; 0x800],
+    bank_2: [u8; 0x800],
+    map_0: [u8; 0x400],
+    map_1: [u8; 0x400],
     oam: [[u8; 4]; 40],
     bgp: u8,
-    obp0: u8,
-    obp1: u8,
+    obp_0: u8,
+    obp_1: u8,
     int_lyc: bool,
     int_0: bool,
     int_1: bool,
@@ -96,7 +82,7 @@ pub struct GPU {
     pub v_blank: bool,
 }
 
-impl GPU {
+impl PPU {
     pub fn new() -> Self {
         Self {
             control: Control {
@@ -116,15 +102,15 @@ impl GPU {
             scx: 0,
             winy: 0,
             winx: 0,
-            vram0: [0; 0x800],
-            vram1: [0; 0x800],
-            vram2: [0; 0x800],
-            map0: [0; 0x400],
-            map1: [0; 0x400],
+            bank_0: [0; 0x800],
+            bank_1: [0; 0x800],
+            bank_2: [0; 0x800],
+            map_0: [0; 0x400],
+            map_1: [0; 0x400],
             oam: [[0; 4]; 40],
             bgp: 0,
-            obp0: 0,
-            obp1: 0,
+            obp_0: 0,
+            obp_1: 0,
             mode: Mode::OAMScan,
             clock: 0,
 
@@ -144,7 +130,7 @@ impl GPU {
 
     pub fn read(&self, address: u16) -> u8 {
         match address {
-            0xff40 => u8::from(self.control),
+            0xff40 => self.control.get(),
             0xff41 => {
                 0x80 | ((self.int_lyc as u8) << 6)
                     | ((self.int_2 as u8) << 5)
@@ -157,22 +143,22 @@ impl GPU {
             0xff44 => self.ly,
             0xff45 => self.lyc,
             0xff47 => self.bgp,
-            0xff48 => self.obp0,
-            0xff49 => self.obp1,
+            0xff48 => self.obp_0,
+            0xff49 => self.obp_1,
             0xff4a => self.winy,
             0xff4b => self.winx,
 
-            0x8000..=0x87ff => self.vram0[(address - 0x8000) as usize],
-            0x8800..=0x8fff => self.vram1[(address - 0x8800) as usize],
-            0x9000..=0x97ff => self.vram2[(address - 0x9000) as usize],
-            0x9800..=0x9bff => self.map0[(address - 0x9800) as usize],
-            0x9c00..=0x9fff => self.map1[(address - 0x9c00) as usize],
+            0x8000..=0x87ff => self.bank_0[(address - 0x8000) as usize],
+            0x8800..=0x8fff => self.bank_1[(address - 0x8800) as usize],
+            0x9000..=0x97ff => self.bank_2[(address - 0x9000) as usize],
+            0x9800..=0x9bff => self.map_0[(address - 0x9800) as usize],
+            0x9c00..=0x9fff => self.map_1[(address - 0x9c00) as usize],
 
             0xfe00..=0xfe9f => {
                 self.oam[((address - 0xfe00) / 4) as usize][((address - 0xfe00) % 4) as usize]
             }
 
-            _ => panic!("Invalid read for GPU"),
+            _ => panic!("Invalid read for PPU"),
         }
     }
 
@@ -180,7 +166,7 @@ impl GPU {
         match address {
             0xff40 => {
                 let prev_lcd_state = self.control.enable_lcd;
-                self.control = Control::from(value);
+                self.control.set(value);
 
                 if prev_lcd_state && !self.control.enable_lcd {
                     self.clock = 0;
@@ -216,11 +202,11 @@ impl GPU {
                 self.bgp = value;
             }
             0xff48 => {
-                self.obp0 = value;
+                self.obp_0 = value;
             }
 
             0xff49 => {
-                self.obp1 = value;
+                self.obp_1 = value;
             }
 
             0xff4a => {
@@ -231,26 +217,26 @@ impl GPU {
             }
 
             0x8000..=0x87ff => {
-                self.vram0[(address - 0x8000) as usize] = value;
+                self.bank_0[(address - 0x8000) as usize] = value;
             }
             0x8800..=0x8fff => {
-                self.vram1[(address - 0x8800) as usize] = value;
+                self.bank_1[(address - 0x8800) as usize] = value;
             }
             0x9000..=0x97ff => {
-                self.vram2[(address - 0x9000) as usize] = value;
+                self.bank_2[(address - 0x9000) as usize] = value;
             }
             0x9800..=0x9bff => {
-                self.map0[(address - 0x9800) as usize] = value;
+                self.map_0[(address - 0x9800) as usize] = value;
             }
             0x9c00..=0x9fff => {
-                self.map1[(address - 0x9c00) as usize] = value;
+                self.map_1[(address - 0x9c00) as usize] = value;
             }
             0xfe00..=0xfe9f => {
                 self.oam[((address - 0xfe00) / 4) as usize][((address - 0xfe00) % 4) as usize] =
                     value;
             }
 
-            _ => panic!("Invalid write for GPU"),
+            _ => panic!("Invalid write for PPU"),
         }
     }
 
@@ -419,8 +405,8 @@ impl GPU {
                         let pixel_color = (high << 1) | low;
 
                         let pixel_id = match palette {
-                            0 => (self.obp0 >> (pixel_color * 2)) & 0x03,
-                            1 => (self.obp1 >> (pixel_color * 2)) & 0x03,
+                            0 => (self.obp_0 >> (pixel_color * 2)) & 0x03,
+                            1 => (self.obp_1 >> (pixel_color * 2)) & 0x03,
                             _ => 0,
                         };
 

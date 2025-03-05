@@ -248,9 +248,9 @@ fn main() -> Result<(), Error> {
                     pixels.frame_mut().copy_from_slice(&buffer);
 
                     let render_result = pixels.render_with(|encoder, render_target, context| {
-                        context
-                            .scaling_renderer
-                            .render(encoder, renderer.texture_view());
+                        let texture: &pixels::wgpu::TextureView = renderer.texture_view();
+
+                        context.scaling_renderer.render(encoder, texture);
 
                         renderer.update(&context.queue, context.scaling_renderer.clip_rect());
 

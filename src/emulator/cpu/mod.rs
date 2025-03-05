@@ -1,8 +1,11 @@
-use crate::emulator::{
-    mbc::MBC, mmu::MMU, registers::DoubleRegister, registers::Register, registers::Registers,
-};
+use registers::{DoubleRegister, Register, Registers};
+
+use crate::emulator::{mbc::MBC, mmu::MMU};
 
 // cpu
+
+//pub mod instructions;
+pub mod registers;
 
 // enum for the interrupt instruction handling
 enum Interrupt {
@@ -123,7 +126,7 @@ impl CPU {
             0x01 | 0x11 | 0x21 | 0x31 => {
                 let i = (opcode >> 4) & 0x03;
                 let word = self.fetch_word();
-                self.set_rg_16(i, opcode, word);
+                self.set_rp(i, word);
                 3
             }
 
@@ -167,7 +170,7 @@ impl CPU {
             // add 16 bit
             0x09 | 0x19 | 0x29 | 0x39 => {
                 let i = (opcode >> 4) & 0x03;
-                self.add16(self.get_rg_16(i, opcode));
+                self.add16(self.get_rp(i));
                 2
             }
 
@@ -184,14 +187,14 @@ impl CPU {
             // inc 16
             0x03 | 0x13 | 0x23 | 0x33 => {
                 let i = (opcode >> 4) & 0x03;
-                self.set_rg_16(i, opcode, self.get_rg_16(i, opcode).wrapping_add(1));
+                self.set_rp(i, self.get_rp(i).wrapping_add(1));
                 2
             }
 
             // dec 16
             0x0b | 0x1b | 0x2b | 0x3b => {
                 let i = (opcode >> 4) & 0x03;
-                self.set_rg_16(i, opcode, self.get_rg_16(i, opcode).wrapping_sub(1));
+                self.set_rp(i, self.get_rp(i).wrapping_sub(1));
                 2
             }
 
@@ -284,8 +287,8 @@ impl CPU {
                 let register_index = opcode & 0x07;
                 let operation_index = (opcode >> 3) & 0x07;
 
-                // assigns the operation as a first class object
-                let operation = self.get_operation(operation_index);
+                // returns the logical operation from the higher class function
+                let operation = self.get_alu(operation_index);
 
                 // calls the operation
                 operation(self, self.get_rg(register_index));
@@ -300,7 +303,7 @@ impl CPU {
             0xc6 | 0xd6 | 0xe6 | 0xf6 | 0xce | 0xde | 0xee | 0xfe => {
                 let byte = self.fetch();
                 let i = (opcode >> 3) & 0x7;
-                let operation = self.get_operation(i);
+                let operation = self.get_alu(i);
                 operation(self, byte);
                 2
             }
@@ -443,7 +446,7 @@ impl CPU {
 
             0xc5 | 0xd5 | 0xe5 | 0xf5 => {
                 let i = (opcode >> 4) & 0x03;
-                self.push(self.get_rg_16(i, opcode));
+                self.push(self.get_rp2(i));
                 4
             }
 
@@ -451,14 +454,14 @@ impl CPU {
             0xc1 | 0xd1 | 0xe1 | 0xf1 => {
                 let i = (opcode >> 4) & 0x03;
                 let value = self.pop();
-                self.set_rg_16(i, opcode, value);
+                self.set_rp2(i, value);
                 3
             }
 
             // rst
             0xc4 | 0xd4 | 0xcc | 0xdc => {
                 let i = (opcode >> 3) & 0x03;
-                if self.get_flag(i) {
+                if self.get_cc(i) {
                     self.push(self.pc + 2);
                     self.pc = self.fetch_word();
                     6
@@ -484,7 +487,7 @@ impl CPU {
             // return
             0xc0 | 0xd0 | 0xc8 | 0xd8 => {
                 let i = (opcode >> 3) & 0x03;
-                if self.get_flag(i) {
+                if self.get_cc(i) {
                     self.pc = self.pop();
                     5
                 } else {
@@ -500,7 +503,7 @@ impl CPU {
             // jump
             0x20 | 0x30 | 0x28 | 0x38 => {
                 let i = (opcode >> 3) & 0x03;
-                if self.get_flag(i) {
+                if self.get_cc(i) {
                     self.jump();
                     3
                 } else {
@@ -516,7 +519,7 @@ impl CPU {
 
             0xc2 | 0xd2 | 0xca | 0xda => {
                 let i = (opcode >> 3) & 0x03;
-                if self.get_flag(i) {
+                if self.get_cc(i) {
                     self.pc = self.fetch_word();
                     4
                 } else {
@@ -565,79 +568,13 @@ impl CPU {
         //println!("CB Opcode is: {:2X}", opcode);
         let register_index = opcode & 0x07;
         match opcode {
-            // rlc
-            0x00..=0x07 => {
-                let v: u8 = self.rlc(self.get_rg(register_index));
-                self.set_rg(register_index, v);
-                match register_index {
-                    6 => 4,
-                    _ => 2,
-                }
-            }
+            0x00..=0x3f => {
+                let operation_index = (opcode >> 3) & 0x07;
+                // assigns the operation as a first class object
+                let operation = self.get_rot(operation_index);
 
-            // rrc
-            0x08..=0x0f => {
-                let v: u8 = self.rrc(self.get_rg(register_index));
-                self.set_rg(register_index, v);
-                match register_index {
-                    6 => 4,
-                    _ => 2,
-                }
-            }
-
-            // rl
-            0x10..=0x17 => {
-                let v: u8 = self.rl(self.get_rg(register_index));
-                self.set_rg(register_index, v);
-                match register_index {
-                    6 => 4,
-                    _ => 2,
-                }
-            }
-
-            // rr
-            0x18..=0x1f => {
-                let v: u8 = self.rr(self.get_rg(register_index));
-                self.set_rg(register_index, v);
-                match register_index {
-                    6 => 4,
-                    _ => 2,
-                }
-            }
-
-            // sla
-            0x20..=0x27 => {
-                let v: u8 = self.sla(self.get_rg(register_index));
-                self.set_rg(register_index, v);
-                match register_index {
-                    6 => 4,
-                    _ => 2,
-                }
-            }
-
-            // sra
-            0x28..=0x2f => {
-                let v: u8 = self.sra(self.get_rg(register_index));
-                self.set_rg(register_index, v);
-                match register_index {
-                    6 => 4,
-                    _ => 2,
-                }
-            }
-
-            // swap
-            0x30..=0x37 => {
-                let v: u8 = self.swap(self.get_rg(register_index));
-                self.set_rg(register_index, v);
-                match register_index {
-                    6 => 4,
-                    _ => 2,
-                }
-            }
-
-            // srl
-            0x38..=0x3f => {
-                let v: u8 = self.srl(self.get_rg(register_index));
+                // calls the operation
+                let v: u8 = operation(self, self.get_rg(register_index));
                 self.set_rg(register_index, v);
                 match register_index {
                     6 => 4,
@@ -953,52 +890,81 @@ impl CPU {
 
     fn get_rg(&self, i: u8) -> u8 {
         match i {
+            0 => self.registers.get(Register::B),
+            1 => self.registers.get(Register::C),
+            2 => self.registers.get(Register::D),
+            3 => self.registers.get(Register::E),
+            4 => self.registers.get(Register::H),
+            5 => self.registers.get(Register::L),
             6 => self
                 .mmu
                 .read_byte(self.registers.get_16(DoubleRegister::HL)),
-            _ => self.registers.get(Register::from_index(i)),
+            7 => self.registers.get(Register::A),
+            _ => panic!("getting r not valid."),
         }
     }
 
     fn set_rg(&mut self, i: u8, v: u8) {
         match i {
+            0 => self.registers.set(Register::B, v),
+            1 => self.registers.set(Register::C, v),
+            2 => self.registers.set(Register::D, v),
+            3 => self.registers.set(Register::E, v),
+            4 => self.registers.set(Register::H, v),
+            5 => self.registers.set(Register::L, v),
             6 => self
                 .mmu
                 .write_byte(v, self.registers.get_16(DoubleRegister::HL)),
-            _ => self.registers.set(Register::from_index(i), v),
+            7 => self.registers.set(Register::A, v),
+            _ => panic!("setting r not valid."),
         }
     }
 
-    fn get_rg_16(&self, i: u8, opcode: u8) -> u16 {
+    fn get_rp(&self, i: u8) -> u16 {
         match i {
             0 => self.registers.get_16(DoubleRegister::BC),
             1 => self.registers.get_16(DoubleRegister::DE),
             2 => self.registers.get_16(DoubleRegister::HL),
-            3 => match opcode {
-                0x00..=0x3f => self.sp,
-                _ => self.registers.get_16(DoubleRegister::AF),
-            },
+            3 => self.sp,
             _ => panic!("double register index not valid."),
         }
     }
 
-    fn set_rg_16(&mut self, i: u8, opcode: u8, v: u16) {
+    fn set_rp(&mut self, i: u8, v: u16) {
         match i {
             0 => self.registers.set_16(DoubleRegister::BC, v),
             1 => self.registers.set_16(DoubleRegister::DE, v),
             2 => self.registers.set_16(DoubleRegister::HL, v),
-            3 => match opcode {
-                0x00..=0x3f => {
-                    self.sp = v;
-                }
-                _ => self.registers.set_16(DoubleRegister::AF, v),
-            },
+            3 => self.sp = v,
             _ => panic!("double register index not valid."),
         }
     }
 
-    // returns the operation depending on the index.
-    fn get_operation(&self, i: u8) -> fn(&mut CPU, u8) {
+    fn get_rp2(&self, i: u8) -> u16 {
+        self.registers.get_16(match i {
+            0 => DoubleRegister::BC,
+            1 => DoubleRegister::DE,
+            2 => DoubleRegister::HL,
+            3 => DoubleRegister::AF,
+            _ => panic!("getting rp2 index not valid."),
+        })
+    }
+
+    fn set_rp2(&mut self, i: u8, v: u16) {
+        self.registers.set_16(
+            match i {
+                0 => DoubleRegister::BC,
+                1 => DoubleRegister::DE,
+                2 => DoubleRegister::HL,
+                3 => DoubleRegister::AF,
+                _ => panic!("setting rp2 index not valid."),
+            },
+            v,
+        )
+    }
+
+    // returns the ALU logical operation depending on the index.
+    fn get_alu(&self, i: u8) -> fn(&mut CPU, u8) {
         match i {
             0 => CPU::add,
             1 => CPU::adc,
@@ -1012,7 +978,21 @@ impl CPU {
         }
     }
 
-    fn get_flag(&self, i: u8) -> bool {
+    fn get_rot(&self, i: u8) -> (fn(&mut CPU, u8) -> u8) {
+        match i {
+            0 => CPU::rlc,
+            1 => CPU::rrc,
+            2 => CPU::rl,
+            3 => CPU::rr,
+            4 => CPU::sla,
+            5 => CPU::sra,
+            6 => CPU::swap,
+            7 => CPU::srl,
+            _ => panic!("Operation index does not exist"),
+        }
+    }
+
+    fn get_cc(&self, i: u8) -> bool {
         match i {
             0 => !self.registers.f.zero,
             1 => self.registers.f.zero,

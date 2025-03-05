@@ -116,10 +116,9 @@ impl Controller {
                     Config::open();
                 }
 
-                Ok(ControllerEvent::Save) => {
+                /*Ok(ControllerEvent::Save) => {
                     println!("{}", self.config.save)
-                }
-
+                }*/
                 Ok(ControllerEvent::Exit) => {
                     // Exits Emulator
                     break;

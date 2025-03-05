@@ -11,7 +11,6 @@ use crate::emulator::joypad::Input;
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Config {
     pub color: Color,
-    pub save: String,
     pub keybinds: Keybinds,
     pub audio: bool,
 }
@@ -46,7 +45,6 @@ impl Config {
                 id2: [0x77, 0x77, 0x77], // dark gray
                 id3: [0x00, 0x00, 0x00], //
             },
-            save: "blah".to_string(),
             keybinds: Keybinds {
                 Up: "up".to_string(),
                 Down: "down".to_string(),

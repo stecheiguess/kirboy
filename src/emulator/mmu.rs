@@ -1,7 +1,7 @@
-use crate::emulator::{apu::APU, gpu::GPU, joypad::Joypad, mbc::MBC, timer::Timer};
+use crate::emulator::{apu::APU, joypad::Joypad, mbc::MBC, ppu::PPU, timer::Timer};
 
 pub struct MMU {
-    pub gpu: GPU,
+    pub gpu: PPU,
     pub joypad: Joypad,
     pub inte: u8,
     pub intf: u8,
@@ -14,7 +14,7 @@ pub struct MMU {
 impl MMU {
     pub fn new(cartridge: Box<dyn MBC>) -> Self {
         Self {
-            gpu: GPU::new(),
+            gpu: PPU::new(),
             joypad: Joypad::new(),
             timer: Timer::new(),
             inte: 0,
