@@ -1,6 +1,7 @@
 use crate::config::Config;
 use crate::emulator::Emulator;
 use crate::player::{CpalPlayer, Player};
+use notify_rust::Notification;
 use std::path::PathBuf;
 use std::sync::mpsc::TryRecvError;
 use std::sync::mpsc::{Receiver, SyncSender, TrySendError};
@@ -39,15 +40,6 @@ impl Controller {
         }
     }
 
-    pub fn debug() -> Self {
-        Self {
-            emulator: None,
-            config: Config::load(),
-            player: None,
-            mode: ControllerMode::Debug,
-        }
-    }
-
     pub fn draw(&self) -> Vec<u8> {
         let buffer = self.emulator.as_ref().unwrap().screen();
         let mut frame = Vec::new();
@@ -66,6 +58,96 @@ impl Controller {
             //println!("{i:?}");
         }
         frame
+    }
+
+    pub fn run_debug(
+        &mut self,
+        sender: SyncSender<ControllerEvent>,
+        receiver: Receiver<ControllerEvent>,
+    ) {
+        loop {
+            match receiver.try_recv() {
+                Ok(ControllerEvent::KeyDown(key)) => {
+                    // Handle key down
+
+                    let x = self.emulator.as_mut().unwrap().step();
+
+                    let draw_data = self.draw();
+
+                    println!("{}", x.display());
+
+                    match sender.try_send(ControllerEvent::Draw(draw_data)) {
+                        Err(TrySendError::Disconnected(_)) => {
+                            break;
+                        }
+                        Err(_) => (),
+                        Ok(_) => (),
+                    }
+                }
+
+                Ok(ControllerEvent::New(path)) => {
+                    // Switch to new emulator
+                    self.config = Config::load();
+
+                    match Emulator::new(&path) {
+                        Ok(e) => self.emulator = Some(e),
+                        Err(s) => {
+                            /*Notification::new()
+                            .summary("Critical Error")
+                            .body("Just <b>kidding</b>, this is just the notificationexample.")
+                            .icon("dialog-error")
+                            .show()
+                            .unwrap();*/
+                        }
+                    };
+
+                    self.player = if self.config.audio {
+                        CpalPlayer::new(self.emulator.as_ref().unwrap().audio_buffer())
+                    } else {
+                        None
+                    };
+                    if self.player.is_some() {
+                        self.emulator
+                            .as_mut()
+                            .unwrap()
+                            .sample(self.player.as_ref().unwrap().sample());
+                        self.player.as_ref().unwrap().play();
+                    }
+
+                    // set title
+                    match sender.try_send(ControllerEvent::Title(
+                        self.emulator.as_ref().unwrap().title(),
+                    )) {
+                        Err(TrySendError::Disconnected(_)) => {
+                            break;
+                        }
+                        Err(_) => (),
+                        Ok(_) => (),
+                    }
+                }
+                Ok(ControllerEvent::LoadConfig) => {
+                    // reload config file
+
+                    self.config = Config::load();
+                }
+
+                Ok(ControllerEvent::OpenConfig) => {
+                    // open config file
+
+                    Config::open();
+                }
+
+                /*Ok(ControllerEvent::Save) => {
+                    println!("{}", self.config.save)
+                }*/
+                Ok(ControllerEvent::Exit) => {
+                    // Exits Emulator
+                    break;
+                }
+                Err(TryRecvError::Disconnected) => break,
+                _ => (),
+            }
+        }
     }
 
     pub fn run_default(
@@ -94,7 +176,19 @@ impl Controller {
                 Ok(ControllerEvent::New(path)) => {
                     // Switch to new emulator
                     self.config = Config::load();
-                    self.emulator = Emulator::new(&path);
+
+                    match Emulator::new(&path) {
+                        Ok(e) => self.emulator = Some(e),
+                        Err(s) => {
+                            Notification::new()
+                                .summary("Critical Error")
+                                .body("Just <b>kidding</b>, this is just the notification example.")
+                                .auto_icon()
+                                .show()
+                                .unwrap();
+                        }
+                    };
+
                     self.player = if self.config.audio {
                         CpalPlayer::new(self.emulator.as_ref().unwrap().audio_buffer())
                     } else {
@@ -170,8 +264,11 @@ impl Controller {
         sender: SyncSender<ControllerEvent>,
         receiver: Receiver<ControllerEvent>,
     ) {
+        if self.config.debug {
+            self.mode = ControllerMode::Debug;
+        }
         match self.mode {
-            ControllerMode::Debug => {}
+            ControllerMode::Debug => self.run_debug(sender, receiver),
             ControllerMode::Default => self.run_default(sender, receiver),
         }
     }

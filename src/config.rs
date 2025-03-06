@@ -13,6 +13,7 @@ pub struct Config {
     pub color: Color,
     pub keybinds: Keybinds,
     pub audio: bool,
+    pub debug: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone)]
@@ -38,6 +39,7 @@ pub struct Keybinds {
 impl Config {
     pub fn new() -> Config {
         Config {
+            debug: false,
             audio: true,
             color: Color {
                 id0: [0xff, 0xff, 0xff], // white

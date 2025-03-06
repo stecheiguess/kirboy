@@ -1,3 +1,5 @@
+use std::fs::OpenOptions;
+use std::io::Write;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use std::{
@@ -7,13 +9,15 @@ use std::{
 };
 use std::{thread, time};
 
+use dirs::config_local_dir;
+
 use crate::system::cpu::{CPUState, CPU};
 use crate::system::joypad::Input;
 use crate::system::mbc;
 use crate::utils::CircularQueue;
 
 pub const CLOCK_FREQUENCY: u32 = 4_194_304;
-pub const STEP_TIME: u32 = 16;
+pub const STEP_TIME: u32 = 12;
 pub const STEP_CYCLES: u32 = (STEP_TIME as f64 / (1000_f64 / CLOCK_FREQUENCY as f64)) as u32;
 
 pub struct Emulator {
@@ -25,7 +29,10 @@ pub struct Emulator {
 }
 
 impl Emulator {
-    pub fn new(rom_path: &PathBuf) -> Option<Box<Emulator>> {
+    pub fn new(rom_path: &PathBuf) -> Result<Box<Emulator>, &str> {
+        if rom_path.extension().unwrap().to_str().unwrap() != "gb" {
+            return Err("file is not compatible with gb.");
+        }
         let ram_path = rom_path.with_extension("sav");
         let rom: Vec<u8> = std::fs::read(rom_path).unwrap();
 
@@ -48,7 +55,7 @@ impl Emulator {
 
         let save = ram_path.clone();
 
-        Some(Box::new(Emulator {
+        Ok(Box::new(Emulator {
             cpu: CPU::new(cartridge),
             save,
             clock: 0,
@@ -61,7 +68,7 @@ impl Emulator {
         self.cpu.mmu.cartridge.title()
     }
 
-    pub fn step(&mut self) -> u8 {
+    pub fn step(&mut self) -> CPUState {
         // makes the emulator run at proper speed
         if self.clock > (STEP_CYCLES) {
             self.clock -= STEP_CYCLES;
@@ -89,7 +96,8 @@ impl Emulator {
 
         let t_cycles = cpu_state.timing * 4;
         self.clock += t_cycles as u32;
-        t_cycles
+
+        cpu_state
     }
 
     pub fn updated(&mut self) -> bool {
@@ -172,8 +180,17 @@ impl Emulator {
 // dumps save when exit.
 impl Drop for Emulator {
     fn drop(&mut self) {
+        let mut log_path = config_local_dir().unwrap();
+        log_path.push("kirboy/log.txt");
+
+        fs::write(&log_path, "");
+
+        let mut file = OpenOptions::new().append(true).open(&log_path).unwrap();
+
+        // Step 3: Iterate through the circular queue and write each String to the file
         for i in self.state_buffer.iter() {
-            println!("{}", i.display());
+            file.write(i.display().as_bytes()).unwrap();
+            file.write(b"\n").unwrap(); // Add newline after each string
         }
 
         //println!("{:?}", self.state_buffer);
