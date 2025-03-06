@@ -1,4 +1,4 @@
-use crate::emulator::mbc::MBC;
+use crate::system::mbc::MBC;
 
 pub struct MBC0 {
     rom: Vec<u8>,

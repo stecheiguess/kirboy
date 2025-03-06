@@ -36,6 +36,8 @@ struct Locals {
 const tau = 6.283185307179586476925286766559;
 
 fn hsv_to_rgb(c: vec3<f32>) -> vec3<f32> {
+    /* stores all the needed constants into a single 4 float vector, using swizzling to 
+    transform to needed values. */
     let K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
     let p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
     return (c.z * mix(K.xxx, clamp(p - K.xxx, vec3<f32>(0.0), vec3<f32>(1.0)), c.y));
@@ -56,30 +58,26 @@ fn fs_main(@location(0) tex_coord: vec2<f32>) -> @location(0) vec4<f32> {
 
     // Sample the texture with the displaced coordinates
     let sampled_color = textureSample(r_tex_color, r_tex_sampler, remap(tex_coord));
- // Speed of the rainbow cycling
-    let value = max(max(sampled_color.r, sampled_color.g), sampled_color.b); // Brightness (value)
     
+    // ensuring that the darker the color, the more saturated the result would be. 
+    // e.g. white -> white, while black -> the most saturated color depending on the time
+    let saturation = 1. -  max(max(sampled_color.r, sampled_color.g), sampled_color.b); 
+    
+    if (tex_coord.x < 0. || tex_coord.x > 1. ||
+        tex_coord.y < 0. || tex_coord.y > 1.) {
+        // Return black for out-of-bounds pixels
+        discard;
+    };
     // Calculate a cycling hue based on time
     let cycling_hue = fract(r_locals.time); // Hue cycles over time (0 to 1)
 
-    // Convert the cycling hue, saturation, and value to RGB
-    let cycling_rgb = hsv_to_rgb(vec3<f32>(cycling_hue, 1. - value, 1.));
+    // Convert the cycling hue, saturation, and value to RGB.
+    // value is given 1, to ensure that brightness is the same. 
+    let cycling_rgb = hsv_to_rgb(vec3<f32>(cycling_hue, saturation , 1.));
 
 
     return vec4<f32>(cycling_rgb, 1.0);
 
-    
-    
-    /*let edge_fade = vec4<f32>(smoothstep(0.0, 0.05, curved.x) *
-                smoothstep(0.0, 0.05, curved.y) *
-                smoothstep(1.0, 0.95, curved.x) *
-                smoothstep(1.0, 0.95, curved.y), 1.);
-*/
-
-    //let noise_color = vec3<f32>((sin(15.*r_locals.time)*0.5) + 0.5); 
-    //let noise_color = vec3<f32>(min(r_locals.time, 1.)); //vec3<f32>(random_vec2(tex_coord.xy * vec2<f32>(r_locals.time % tau + bias)));
-
-    //return vec4<f32>(sampled_color);
 }
 
 

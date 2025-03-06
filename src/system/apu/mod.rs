@@ -7,9 +7,7 @@ use square::Square;
 use timer::Timer;
 use wave::Wave;
 
-use crate::player::SAMPLE_RATE;
-
-use super::CLOCK_FREQUENCY;
+use crate::{emulator::CLOCK_FREQUENCY, player::SAMPLE_RATE};
 
 mod channel;
 mod noise;

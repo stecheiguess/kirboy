@@ -6,7 +6,7 @@ use std::{
     path::Path,
 };
 
-use crate::emulator::joypad::Input;
+use crate::system::joypad::Input;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Config {

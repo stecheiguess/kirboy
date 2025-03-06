@@ -1,4 +1,4 @@
-use crate::emulator::mbc::{ram_banks, rom_banks, MBC};
+use crate::system::mbc::{ram_banks, rom_banks, MBC};
 
 pub struct MBC5 {
     rom: Vec<u8>,

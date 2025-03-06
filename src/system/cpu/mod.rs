@@ -1,13 +1,32 @@
 use registers::{DoubleRegister, Register, Registers};
 
-use crate::emulator::{mbc::MBC, mmu::MMU};
+use crate::system::{mbc::MBC, mmu::MMU};
 
 // cpu
 
 //pub mod instructions;
+pub mod mnemonic;
 pub mod registers;
 
 // enum for the interrupt instruction handling
+
+#[derive(Copy, Clone, Debug)]
+pub struct CPUState {
+    pub result: CPUResult,
+    pub pc: u16,
+
+    // stored as m_cycles.
+    pub timing: u8,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub enum CPUResult {
+    Halted,
+    Ins(u8),
+    InsCB(u8),
+    Interrupt,
+}
+
 enum Interrupt {
     OFF,
     EXECUTE,
@@ -26,7 +45,7 @@ pub struct CPU {
 }
 
 impl CPU {
-    pub fn new(cartridge: Box<dyn MBC>, boot: bool) -> Self {
+    pub fn new(cartridge: Box<dyn MBC>) -> Self {
         Self {
             registers: Registers::init(),
             mmu: MMU::init(cartridge),
@@ -97,29 +116,43 @@ impl CPU {
         };
     }
 
-    pub fn step(&mut self) -> u8 {
+    pub fn step(&mut self) -> CPUState {
         self.update_interrupt();
 
-        let m_cycles = if !self.handle_interrupt() {
+        let state = if !self.handle_interrupt() {
             if self.halted {
-                1
+                CPUState {
+                    result: CPUResult::Halted,
+                    pc: self.pc,
+                    timing: 1,
+                }
             } else {
                 self.execute()
             }
         } else {
-            4
+            CPUState {
+                result: CPUResult::Interrupt,
+                pc: self.pc,
+                timing: 4,
+            }
         };
 
-        self.mmu.step(m_cycles);
-        m_cycles
+        self.mmu.step(state.timing);
+        state
     }
 
-    fn execute(&mut self) -> u8 {
+    fn execute(&mut self) -> CPUState {
         //println!("PROGRAM COUNTER: 0x{:04X}", self.pc);
         let opcode = self.fetch();
         //println!("Instruction {:2X}", opcode);
         //println!("{:?}", self.registers);
-        match opcode {
+
+        // CB
+        if opcode == 0xcb {
+            return self.execute_cb();
+        }
+
+        let timing = match opcode {
             0x00 | 0x10 => 1,
 
             // ld 16 bit
@@ -307,9 +340,6 @@ impl CPU {
                 operation(self, byte);
                 2
             }
-
-            // CB
-            0xcb => self.execute_cb(),
 
             // random accumulator (a) stuff
             0x07 => {
@@ -560,14 +590,20 @@ impl CPU {
                 //println!("Instruction {:2X} is not implemented", other);
                 1
             }
-        }
+        };
+
+        return CPUState {
+            result: CPUResult::Ins(opcode),
+            pc: self.pc,
+            timing,
+        };
     }
 
-    fn execute_cb(&mut self) -> u8 {
+    fn execute_cb(&mut self) -> CPUState {
         let opcode = self.fetch();
         //println!("CB Opcode is: {:2X}", opcode);
         let register_index = opcode & 0x07;
-        match opcode {
+        let timing = match opcode {
             0x00..=0x3f => {
                 let operation_index = (opcode >> 3) & 0x07;
                 // assigns the operation as a first class object
@@ -614,6 +650,12 @@ impl CPU {
             }
 
             other => 2,
+        };
+
+        CPUState {
+            result: CPUResult::InsCB(opcode),
+            pc: self.pc,
+            timing,
         }
     }
 

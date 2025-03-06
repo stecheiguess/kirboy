@@ -4,7 +4,6 @@ use crate::player::{CpalPlayer, Player};
 use std::path::PathBuf;
 use std::sync::mpsc::TryRecvError;
 use std::sync::mpsc::{Receiver, SyncSender, TrySendError};
-use tao::keyboard::Key;
 
 pub enum ControllerEvent {
     KeyUp(String),
@@ -18,10 +17,16 @@ pub enum ControllerEvent {
     Save,
 }
 
+pub enum ControllerMode {
+    Default,
+    Debug,
+}
+
 pub struct Controller {
     pub emulator: Option<Box<Emulator>>,
     player: Option<Box<dyn Player>>,
     config: Config,
+    mode: ControllerMode,
 }
 
 impl Controller {
@@ -30,6 +35,16 @@ impl Controller {
             emulator: None,
             config: Config::load(),
             player: None,
+            mode: ControllerMode::Default,
+        }
+    }
+
+    pub fn debug() -> Self {
+        Self {
+            emulator: None,
+            config: Config::load(),
+            player: None,
+            mode: ControllerMode::Debug,
         }
     }
 
@@ -53,7 +68,7 @@ impl Controller {
         frame
     }
 
-    pub fn run(
+    pub fn run_default(
         &mut self,
         sender: SyncSender<ControllerEvent>,
         receiver: Receiver<ControllerEvent>,
@@ -147,6 +162,17 @@ impl Controller {
                 }
                 None => continue,
             }
+        }
+    }
+
+    pub fn run(
+        &mut self,
+        sender: SyncSender<ControllerEvent>,
+        receiver: Receiver<ControllerEvent>,
+    ) {
+        match self.mode {
+            ControllerMode::Debug => {}
+            ControllerMode::Default => self.run_default(sender, receiver),
         }
     }
 }

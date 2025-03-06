@@ -7,16 +7,10 @@ use std::{
 };
 use std::{thread, time};
 
-use cpu::CPU;
-use joypad::Input;
-
-pub mod apu;
-pub mod cpu;
-pub mod joypad;
-pub mod mbc;
-pub mod mmu;
-pub mod ppu;
-pub mod timer;
+use crate::system::cpu::{CPUState, CPU};
+use crate::system::joypad::Input;
+use crate::system::mbc;
+use crate::utils::CircularQueue;
 
 pub const CLOCK_FREQUENCY: u32 = 4_194_304;
 pub const STEP_TIME: u32 = 16;
@@ -27,7 +21,7 @@ pub struct Emulator {
     save: PathBuf,
     clock: u32,
     now: Instant,
-    speed: u32,
+    state_buffer: CircularQueue<CPUState>,
 }
 
 impl Emulator {
@@ -55,11 +49,11 @@ impl Emulator {
         let save = ram_path.clone();
 
         Some(Box::new(Emulator {
-            cpu: CPU::new(cartridge, false),
+            cpu: CPU::new(cartridge),
             save,
             clock: 0,
-            now: Instant::now(), //controls: conf.controls
-            speed: 1,
+            now: Instant::now(),
+            state_buffer: CircularQueue::new(500),
         }))
     }
 
@@ -69,8 +63,8 @@ impl Emulator {
 
     pub fn step(&mut self) -> u8 {
         // makes the emulator run at proper speed
-        if self.clock > (STEP_CYCLES * self.speed) {
-            self.clock -= STEP_CYCLES * self.speed;
+        if self.clock > (STEP_CYCLES) {
+            self.clock -= STEP_CYCLES;
             let now = time::Instant::now();
             let d = now.duration_since(self.now);
             let s = STEP_TIME.saturating_sub(d.as_millis() as u32) as u64;
@@ -86,9 +80,16 @@ impl Emulator {
                 self.now = now;
             }
         }
-        let cycles = self.cpu.step() * 4;
-        self.clock += cycles as u32;
-        cycles
+
+        let cpu_state = self.cpu.step();
+
+        if self.state_buffer.push(cpu_state).is_err() {
+            self.state_buffer.pop();
+        };
+
+        let t_cycles = cpu_state.timing * 4;
+        self.clock += t_cycles as u32;
+        t_cycles
     }
 
     pub fn updated(&mut self) -> bool {
@@ -171,6 +172,11 @@ impl Emulator {
 // dumps save when exit.
 impl Drop for Emulator {
     fn drop(&mut self) {
+        for i in self.state_buffer.iter() {
+            println!("{}", i.display());
+        }
+
+        //println!("{:?}", self.state_buffer);
         self.save();
     }
 }

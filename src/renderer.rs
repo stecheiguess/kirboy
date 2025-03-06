@@ -31,6 +31,7 @@ pub enum Shader {
 }
 
 impl Shader {
+    // maps the enum to the location of the shader file.
     pub fn file(shader: Shader) -> &'static str {
         match shader {
             Shader::BASE => include_str!("shaders/base.wgsl"),
@@ -42,6 +43,7 @@ impl Shader {
         }
     }
 
+    // gives the name of the shader.
     pub fn name(shader: Shader) -> String {
         match shader {
             Shader::BASE => "base",
@@ -74,6 +76,8 @@ impl Renderer {
         b_height: u32,
     ) -> Result<Self, TextureError> {
         let device = pixels.device();
+
+        // shader module is loaded from the file declared by the enum above.
         let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
             source: wgpu::ShaderSource::Wgsl(Shader::file(shader).into()),
@@ -83,7 +87,7 @@ impl Renderer {
         // This will be used as the render target for the default scaling renderer
         let texture_view = create_texture_view(pixels, width, height)?;
 
-        // Create a texture sampler with nearest neighbor
+        // Create a texture sampler using  nearest neighbor.
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("Renderer sampler"),
             address_mode_u: wgpu::AddressMode::ClampToEdge,
@@ -100,17 +104,15 @@ impl Renderer {
         });
 
         // Create vertex buffer; array-of-array of position and texture coordinates
-        let vertex_data: [[f32; 4]; 6] = [
-            // One full-screen triangle
-            // See: https://github.com/parasyte/pixels/issues/180
-            [-2.0, -2.0, 0.0, 0.0], // Bottom-left
-            [2.0, -2.0, 2.0, 0.0],  // Bottom-right
-            [-2.0, 2.0, 0.0, 2.0],  // Top-left
-            [-2.0, 2.0, 0.0, 2.0],  // Top-left
-            [2.0, -2.0, 2.0, 0.0],  // Bottom-right
-            [2.0, 2.0, 2.0, 2.0],
+        let vertex_data: [[f32; 2]; 3] = [
+            // One full-screen triangle used instead of two triangles that form a quad, as it leads to less overhead while rendering.
+            [-1.0, -1.0], // Bottom-left
+            [3.0, -1.0],  // Bottom-right
+            [-1.0, 3.0],  // Top-left
         ];
         let vertex_data_slice = bytemuck::cast_slice(&vertex_data);
+
+        // Allocates the vertex buffer, by storing the clip-space vertex poisitions and texture coordinates.
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Renderer vertex buffer"),
             contents: vertex_data_slice,
@@ -146,7 +148,7 @@ impl Renderer {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
-        // Create bind group
+        // Create bind group layout, which defines how textures / buffers will be accessed by the GPU via bindings.
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: None,
             entries: &[
@@ -190,6 +192,8 @@ impl Renderer {
                 },
             ],
         });
+
+        // ties the texture, sampler and uniform buffers into a bind group.
         let bind_group = create_bind_group(
             device,
             &bind_group_layout,
@@ -199,12 +203,14 @@ impl Renderer {
             &cutout_buffer,
         );
 
-        // Create pipeline
+        // Defines the layout of the pipe line.
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Renderer pipeline layout"),
             bind_group_layouts: &[&bind_group_layout],
             push_constant_ranges: &[],
         });
+
+        // Creates the Pipeline, as well as defining the entry points for both the fragment and vertex shader.
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Renderer pipeline"),
             layout: Some(&pipeline_layout),
@@ -246,9 +252,13 @@ impl Renderer {
         })
     }
 
+    // returns the texture_view.
     pub fn texture_view(&self) -> &wgpu::TextureView {
         &self.texture_view
     }
+
+    /* reallocates textures and updates the bind group when the window is resized.
+    needed so that the underlying default scaling renderer can pass in the new scaled up texture.*/
 
     pub fn resize(
         &mut self,
@@ -272,6 +282,9 @@ impl Renderer {
         Ok(())
     }
 
+    /* updates uniform buffer values regarding size of window and the size of screen,
+    for transformations in the shader to prevent distortions, and the time buffer.*/
+
     pub fn update(&mut self, queue: &wgpu::Queue, clip_rect: (u32, u32, u32, u32)) {
         self.time += 0.01;
         queue.write_buffer(&self.time_buffer, 0, &self.time.to_ne_bytes());
@@ -288,11 +301,15 @@ impl Renderer {
         );
     }
 
+    /* actual render function. */
     pub fn render(
         &mut self,
         encoder: &mut wgpu::CommandEncoder,
         render_target: &wgpu::TextureView,
     ) {
+        // render pass is started, setting the pipeline, bind group and drawing the vertices.
+        // clears the frame buffer to black, and prepares the frame buffer to receive rendered pixels.
+        // output is given to the render target.
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Renderer render pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -308,10 +325,7 @@ impl Renderer {
         rpass.set_pipeline(&self.render_pipeline);
         rpass.set_bind_group(0, &self.bind_group, &[]);
         rpass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-        //rpass.set_scissor_rect(clip_rect.0, clip_rect.1, clip_rect.2, clip_rect.3);
-        rpass.draw(0..6, 0..1);
-
-        //println!("{:?}", clip_rect.0 as f32 / self.width as f32);
+        rpass.draw(0..3, 0..1);
     }
 
     pub fn reset(&mut self) {
@@ -319,6 +333,7 @@ impl Renderer {
     }
 }
 
+// creates the new texture view and renders..
 fn create_texture_view(
     pixels: &pixels::Pixels,
     width: u32,
@@ -346,6 +361,7 @@ fn create_texture_view(
         .create_view(&wgpu::TextureViewDescriptor::default()))
 }
 
+// creates the bind group.
 fn create_bind_group(
     device: &wgpu::Device,
     bind_group_layout: &wgpu::BindGroupLayout,

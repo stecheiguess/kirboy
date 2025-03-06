@@ -1,6 +1,6 @@
 use std::time;
 
-use crate::emulator::mbc::{ram_banks, rom_banks, MBC};
+use crate::system::mbc::{ram_banks, rom_banks, MBC};
 
 pub struct MBC3 {
     rom: Vec<u8>,

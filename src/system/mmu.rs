@@ -1,4 +1,4 @@
-use crate::emulator::{apu::APU, joypad::Joypad, mbc::MBC, ppu::PPU, timer::Timer};
+use crate::system::{apu::APU, joypad::Joypad, mbc::MBC, ppu::PPU, timer::Timer};
 
 pub struct MMU {
     pub gpu: PPU,
@@ -50,6 +50,8 @@ impl MMU {
         mmu
     }
 
+    /* when the instruction timings are received, synchronize
+    the component clocks by incrementing same amount through the bus. */
     pub fn step(&mut self, m_cycles: u8) {
         self.timer.step(m_cycles);
         self.intf |= (self.timer.interrupt as u8) << 2;
@@ -68,6 +70,7 @@ impl MMU {
         self.apu.step(m_cycles);
     }
 
+    // reads the address by mapping it to the correct component.
     pub fn read_byte(&self, address: u16) -> u8 {
         match address {
             0x0000..=0x7fff => self.cartridge.read_rom(address),
@@ -80,7 +83,7 @@ impl MMU {
 
             0xff04..=0xff07 => self.timer.read(address),
 
-            // oam dma transfer
+            // oam dma transfer - returns nothing.
             0xff46 => 0,
 
             0xff40..=0xff4b => self.gpu.read(address),
@@ -89,6 +92,7 @@ impl MMU {
 
             0xffff => self.inte,
 
+            // unmapped regions would just be saved in the local RAM.
             other => {
                 // println!("Address 0x{:02X} not yet implemented.", other);
                 self.ram[address as usize]
@@ -96,6 +100,7 @@ impl MMU {
         }
     }
 
+    // writes value to given address.
     pub fn write_byte(&mut self, value: u8, address: u16) {
         match address {
             0x0000..=0x7fff => self.cartridge.write_rom(value, address),
@@ -106,7 +111,7 @@ impl MMU {
 
             0xff10..=0xff3f => self.apu.write(value, address),
 
-            //oam dma transfer
+            // call to start the OAM DMA transfer.
             0xff46 => self.oam_dma(value),
 
             0xff40..=0xff4b => self.gpu.write(value, address),
@@ -142,6 +147,9 @@ impl MMU {
         self.write_byte((value & 0x00ff) as u8, address);
         self.write_byte((value >> 8) as u8, address.wrapping_add(1));
     }
+
+    /* when called, starts reading from addresses that contain the Object Tile Data,
+    before transfering it to the OAM memory for use. */
 
     fn oam_dma(&mut self, value: u8) {
         let base_addr = (value as u16) << 8;

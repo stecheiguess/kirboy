@@ -3,7 +3,6 @@
 
 use controller::{Controller, ControllerEvent};
 use dirs::download_dir;
-use emulator::mbc::new;
 use error_iter::ErrorIter as _;
 use log::error;
 use muda::CheckMenuItem;
@@ -12,6 +11,7 @@ use renderer::{Renderer, Shader, SHADER_LIST};
 use std::path::PathBuf;
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 use std::thread;
+use system::mbc::new;
 use tao::dpi::LogicalSize;
 use tao::event::{ElementState, Event, WindowEvent};
 use tao::event_loop::{ControlFlow, EventLoopBuilder};
@@ -30,6 +30,7 @@ mod controller;
 mod emulator;
 mod player;
 mod renderer;
+mod system;
 mod utils;
 
 #[cfg(target_os = "macos")]
@@ -203,7 +204,6 @@ fn main() -> Result<(), Error> {
 
     let file_m = Submenu::new("&File", true);
     let window_m = Submenu::new("&Window", true);
-    let shader_m = Submenu::new("&Shaders", true);
 
     file_m.append_items(&[&open, &config_open, &config_reload]);
 
@@ -216,7 +216,7 @@ fn main() -> Result<(), Error> {
         &PredefinedMenuItem::bring_all_to_front(None),
     ]);
 
-    menu_bar.append_items(&[&file_m, &window_m, &shader_m]);
+    menu_bar.append_items(&[&file_m, &window_m]);
 
     #[cfg(target_os = "windows")]
     {
@@ -234,6 +234,7 @@ fn main() -> Result<(), Error> {
         window_m.set_as_windows_menu_for_nsapp();
     }
 
+    // index of the shader being used.
     let mut shader = 0;
 
     event_loop.run(move |event, event_loop, control_flow| {
