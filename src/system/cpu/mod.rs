@@ -73,23 +73,22 @@ impl CPU {
     fn handle_interrupt(&mut self) -> bool {
         let interrupts = self.mmu.inte & self.mmu.intf;
 
-        if self.ime == false && self.halted == false {
-            return false;
-        }
-
-        if interrupts == 0 {
+        if !(self.ime || self.halted) || interrupts == 0 {
             return false;
         }
 
         self.halted = false;
-        if self.ime == false {
+
+        if !self.ime {
             return false;
         }
 
         self.ime = false;
+
+        // disables handled interrupt, by looking at the trailing zeros, as flags are ordered by priority in the representation.
         let interrupt = interrupts.trailing_zeros();
-        // disable interrupt
         self.mmu.intf = self.mmu.intf & !(1 << interrupt);
+
         self.push(self.pc);
         self.pc = 0x40 | ((interrupt as u16) << 3);
         return true;
@@ -360,29 +359,7 @@ impl CPU {
 
             // really complex daa.
             0x27 => {
-                let mut a = self.registers.get(Register::A);
-                if !self.registers.f.subtract {
-                    if self.registers.f.carry || a > 0x99 {
-                        a = a.wrapping_add(0x60);
-                        self.registers.set(Register::A, a);
-                        self.registers.f.carry = true;
-                    }
-                    if self.registers.f.half_carry || a & 0x0f > 0x09 {
-                        a = a.wrapping_add(0x06);
-                        self.registers.set(Register::A, a);
-                    }
-                } else {
-                    if self.registers.f.carry {
-                        a = a.wrapping_sub(0x60);
-                        self.registers.set(Register::A, a);
-                    }
-                    if self.registers.f.half_carry {
-                        a = a.wrapping_sub(0x06);
-                        self.registers.set(Register::A, a);
-                    }
-                }
-                self.registers.f.zero = self.registers.get(Register::A) == 0;
-                self.registers.f.half_carry = false;
+                self.daa();
                 1
             }
 
@@ -606,7 +583,7 @@ impl CPU {
         let timing = match opcode {
             0x00..=0x3f => {
                 let operation_index = (opcode >> 3) & 0x07;
-                // assigns the operation as a first class object
+                // assigns the operation as a first class function
                 let operation = self.get_rot(operation_index);
 
                 // calls the operation
@@ -928,6 +905,32 @@ impl CPU {
         self.registers.f.subtract = false;
         self.registers.f.half_carry = false;
         new_value
+    }
+
+    fn daa(&mut self) {
+        let mut a = self.registers.get(Register::A);
+        if !self.registers.f.subtract {
+            if self.registers.f.carry || a > 0x99 {
+                a = a.wrapping_add(0x60);
+                self.registers.set(Register::A, a);
+                self.registers.f.carry = true;
+            }
+            if self.registers.f.half_carry || a & 0x0f > 0x09 {
+                a = a.wrapping_add(0x06);
+                self.registers.set(Register::A, a);
+            }
+        } else {
+            if self.registers.f.carry {
+                a = a.wrapping_sub(0x60);
+                self.registers.set(Register::A, a);
+            }
+            if self.registers.f.half_carry {
+                a = a.wrapping_sub(0x06);
+                self.registers.set(Register::A, a);
+            }
+        }
+        self.registers.f.zero = self.registers.get(Register::A) == 0;
+        self.registers.f.half_carry = false;
     }
 
     fn get_rg(&self, i: u8) -> u8 {

@@ -7,7 +7,7 @@ const HBLANK_CYCLES: u16 = 204;
 const VBLANK_CYCLES: u16 = 456;
 
 #[derive(Copy, Clone, Debug)]
-struct Control {
+struct LCDC {
     enable_lcd: bool,
     tile_map_window: bool,
     enable_window: bool,
@@ -15,10 +15,9 @@ struct Control {
     tile_map_bg: bool,
     obj_size: bool,
     enable_obj: bool,
-    // for DMG, bg and window display, for CGB, master priority
     enable_bg_window: bool,
 }
-impl Control {
+impl LCDC {
     fn get(&self) -> u8 {
         ((self.enable_lcd as u8) << 7)
             | ((self.tile_map_window as u8) << 6)
@@ -51,7 +50,7 @@ enum Mode {
 }
 
 pub struct PPU {
-    control: Control,
+    lcdc: LCDC,
     ly: u8,
     lyc: u8,
     scy: u8,
@@ -85,7 +84,7 @@ pub struct PPU {
 impl PPU {
     pub fn new() -> Self {
         Self {
-            control: Control {
+            lcdc: LCDC {
                 enable_lcd: false,
                 tile_map_window: false,
                 enable_window: false,
@@ -130,7 +129,7 @@ impl PPU {
 
     pub fn read(&self, address: u16) -> u8 {
         match address {
-            0xff40 => self.control.get(),
+            0xff40 => self.lcdc.get(),
             0xff41 => {
                 0x80 | ((self.int_lyc as u8) << 6)
                     | ((self.int_2 as u8) << 5)
@@ -165,10 +164,10 @@ impl PPU {
     pub fn write(&mut self, value: u8, address: u16) {
         match address {
             0xff40 => {
-                let prev_lcd_state = self.control.enable_lcd;
-                self.control.set(value);
+                let prev_lcd_state = self.lcdc.enable_lcd;
+                self.lcdc.set(value);
 
-                if prev_lcd_state && !self.control.enable_lcd {
+                if prev_lcd_state && !self.lcdc.enable_lcd {
                     self.clock = 0;
                     self.ly = 0;
                     self.mode = Mode::HBlank;
@@ -241,7 +240,7 @@ impl PPU {
     }
 
     fn draw_bg_line(&mut self) {
-        if !self.control.enable_bg_window {
+        if !self.lcdc.enable_bg_window {
             return;
         }
 
@@ -249,7 +248,7 @@ impl PPU {
         let tile_map_row = y / 8;
         let y_in_tile = y % 8;
 
-        let bg_addr = if self.control.tile_map_bg {
+        let bg_addr = if self.lcdc.tile_map_bg {
             0x9c00
         } else {
             0x9800
@@ -262,7 +261,7 @@ impl PPU {
 
             let tile_index =
                 self.read(bg_addr + ((tile_map_row as u16) << 5) + (tile_map_col as u16));
-            let tile_addr = if self.control.tile_area {
+            let tile_addr = if self.lcdc.tile_area {
                 0x8000 + (tile_index as u16) * 16
             } else {
                 0x8800 + (((tile_index as i8 as i16) + 128) as u16) * 16
@@ -281,7 +280,7 @@ impl PPU {
     }
 
     fn draw_window_line(&mut self) {
-        if !self.control.enable_window {
+        if !self.lcdc.enable_window {
             return;
         }
 
@@ -289,7 +288,7 @@ impl PPU {
             let y = self.ly - self.winy;
             let tile_map_row = y / 8;
             let y_in_tile = y % 8;
-            let win_addr = if self.control.tile_map_window {
+            let win_addr = if self.lcdc.tile_map_window {
                 0x9c00
             } else {
                 0x9800
@@ -302,10 +301,13 @@ impl PPU {
 
                 let tile_index =
                     self.read(win_addr + ((tile_map_row as u16) << 5) + (tile_map_col as u16));
-                let tile_addr = if self.control.tile_area {
+
+                let tile_addr = if self.lcdc.tile_area {
+                    // for unsigned order, just converts it to a u16 and add normally.
                     0x8000 + (tile_index as u16) * 16
                 } else {
-                    0x8800 + (((tile_index as i8 as i16) + 128) as u16) * 16
+                    // for signed order, uses twos compliment to convert the ranges 128-255 to -128-1.
+                    (0x9000u16 as i16 + (tile_index as i16) * 16) as u16
                 };
 
                 let low =
@@ -354,7 +356,7 @@ impl PPU {
     } */
 
     fn draw_sprite_line(&mut self) {
-        if !self.control.enable_obj {
+        if !self.lcdc.enable_obj {
             return;
         }
 
@@ -362,7 +364,7 @@ impl PPU {
             let y = (self.oam[sprite_index][0] as i32) - 16;
             let x = (self.oam[sprite_index][1] as i32) - 8;
             let sprite_attr = self.oam[sprite_index][3];
-            let sprite_size = if self.control.obj_size { 16 } else { 8 };
+            let sprite_size = if self.lcdc.obj_size { 16 } else { 8 };
 
             let x_flip = ((sprite_attr >> 5) & 0x1) == 1;
             let y_flip = ((sprite_attr >> 6) & 0x1) == 1;
@@ -447,7 +449,7 @@ impl PPU {
     }
 
     pub fn step(&mut self, m_cycles: u8) {
-        if !self.control.enable_lcd {
+        if !self.lcdc.enable_lcd {
             return;
         }
 

@@ -11,10 +11,10 @@ use std::{thread, time};
 
 use dirs::config_local_dir;
 
+use crate::circular::Circular;
 use crate::system::cpu::{CPUState, CPU};
 use crate::system::joypad::Input;
 use crate::system::mbc::{self, MBCError};
-use crate::utils::CircularQueue;
 
 pub const CLOCK_FREQUENCY: u32 = 4_194_304;
 pub const STEP_TIME: u32 = 12;
@@ -31,7 +31,7 @@ pub struct Emulator {
     save: PathBuf,
     clock: u32,
     now: Instant,
-    state_buffer: CircularQueue<CPUState>,
+    state_buffer: Circular<CPUState>,
 }
 
 impl Emulator {
@@ -56,7 +56,7 @@ impl Emulator {
             save,
             clock: 0,
             now: Instant::now(),
-            state_buffer: CircularQueue::new(500),
+            state_buffer: Circular::new(500),
         }))
     }
 
@@ -108,9 +108,7 @@ impl Emulator {
 
         let cpu_state = self.cpu.step();
 
-        if self.state_buffer.push(cpu_state).is_err() {
-            self.state_buffer.pop();
-        };
+        self.state_buffer.push(cpu_state);
 
         let t_cycles = cpu_state.timing * 4;
         self.clock += t_cycles as u32;
@@ -118,37 +116,15 @@ impl Emulator {
         cpu_state
     }
 
-    pub fn updated(&mut self) -> bool {
-        let updated = self.cpu.mmu.gpu.v_blank;
-        self.cpu.mmu.gpu.v_blank = false;
+    pub fn screen_updated(&mut self) -> bool {
+        let updated = self.cpu.mmu.ppu.v_blank;
+        self.cpu.mmu.ppu.v_blank = false;
         updated
     }
 
     pub fn screen(&self) -> Vec<u8> {
-        self.cpu.mmu.gpu.buffer.to_vec()
+        self.cpu.mmu.ppu.buffer.to_vec()
     }
-    // draws to pixel buffer.
-    /*pub fn draw(&mut self, config: &Config) -> Vec<u8> {
-        //self.update();
-        let screen = self.cpu.mmu.gpu.buffer;
-
-        let mut frame = Vec::new();
-        for (&byte) in screen.iter() {
-            let mut rgba: [u8; 4] = [0, 0, 0, 0xff];
-            match byte {
-                0 => rgba[..3].copy_from_slice(&config.color.id0), // white
-                1 => rgba[..3].copy_from_slice(&config.color.id1), // light gray
-                2 => rgba[..3].copy_from_slice(&config.color.id2), // dark gray
-                3 => rgba[..3].copy_from_slice(&config.color.id3), // black
-
-                _ => (),
-            }
-
-            frame.extend_from_slice(&rgba);
-            //println!("{i:?}");
-        }
-        frame
-    }*/
 
     pub fn key_up(&mut self, key: Option<Input>) {
         if key.is_some() {
@@ -162,21 +138,7 @@ impl Emulator {
         }
     }
 
-    /*fn check_table(&self, key: &Key) -> Option<Input> {
-        //println!("checking key table");
-        self.key_table.get(key).copied()
-    }*/
-
-    // changes to green just because
-    /*pub fn green(&mut self) {
-        self.color.id0 = [155, 188, 15];
-        self.color.id1 = [139, 172, 15];
-        self.color.id2 = [48, 98, 48];
-        self.color.id3 = [15, 56, 15];
-        println!("to green")
-    }*/
-
-    pub fn audio_buffer(&self) -> Arc<Mutex<Vec<(f32, f32)>>> {
+    pub fn audio(&self) -> Arc<Mutex<Vec<(f32, f32)>>> {
         self.cpu.mmu.apu.buffer.clone()
     }
 
@@ -190,6 +152,7 @@ impl Emulator {
         println!("Saved");
     }
 
+    // sets the internal APU sample rate.
     pub fn sample(&mut self, sample: u32) {
         self.cpu.mmu.apu.sample(sample);
     }
@@ -205,7 +168,7 @@ impl Drop for Emulator {
 
         let mut file = OpenOptions::new().append(true).open(&log_path).unwrap();
 
-        // Step 3: Iterate through the circular queue and write each String to the file
+        // Iterates through the circular queue and write each String to the file
         for i in self.state_buffer.iter() {
             file.write(i.display().as_bytes()).unwrap();
             file.write(b"\n").unwrap(); // Add newline after each string

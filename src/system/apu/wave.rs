@@ -135,6 +135,8 @@ impl Channel for Wave {
                 0x00
             };
 
+            //println!("WAVE_RAM = {:?} AMPL = {:?}", sample, ampl);
+
             //let ampl = 0;
 
             self.from = self.from.wrapping_add(self.timer.period);

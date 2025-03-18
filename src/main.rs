@@ -27,13 +27,13 @@ use muda::{
     Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu,
 };
 
+mod circular;
 mod config;
 mod controller;
 mod emulator;
 mod player;
 mod renderer;
 mod system;
-mod utils;
 
 #[cfg(target_os = "macos")]
 use tao::platform::macos::WindowBuilderExtMacOS;

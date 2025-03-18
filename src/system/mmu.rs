@@ -1,7 +1,7 @@
 use crate::system::{apu::APU, joypad::Joypad, mbc::MBC, ppu::PPU, timer::Timer};
 
 pub struct MMU {
-    pub gpu: PPU,
+    pub ppu: PPU,
     pub joypad: Joypad,
     pub inte: u8,
     pub intf: u8,
@@ -14,7 +14,7 @@ pub struct MMU {
 impl MMU {
     pub fn new(cartridge: Box<dyn MBC>) -> Self {
         Self {
-            gpu: PPU::new(),
+            ppu: PPU::new(),
             joypad: Joypad::new(),
             timer: Timer::new(),
             inte: 0,
@@ -60,12 +60,12 @@ impl MMU {
         self.intf |= (self.joypad.interrupt as u8) << 4;
         self.joypad.interrupt = false;
 
-        self.gpu.step(m_cycles);
-        self.intf |= self.gpu.interrupt_vblank as u8;
-        self.gpu.interrupt_vblank = false;
+        self.ppu.step(m_cycles);
+        self.intf |= self.ppu.interrupt_vblank as u8;
+        self.ppu.interrupt_vblank = false;
 
-        self.intf |= (self.gpu.interrupt_stat as u8) << 1;
-        self.gpu.interrupt_stat = false;
+        self.intf |= (self.ppu.interrupt_stat as u8) << 1;
+        self.ppu.interrupt_stat = false;
 
         self.apu.step(m_cycles);
     }
@@ -74,9 +74,9 @@ impl MMU {
     pub fn read_byte(&self, address: u16) -> u8 {
         match address {
             0x0000..=0x7fff => self.cartridge.read_rom(address),
-            0x8000..=0x9fff => self.gpu.read(address),
+            0x8000..=0x9fff => self.ppu.read(address),
             0xa000..=0xbfff => self.cartridge.read_ram(address),
-            0xfe00..=0xfe9f => self.gpu.read(address),
+            0xfe00..=0xfe9f => self.ppu.read(address),
             0xff00 => self.joypad.read(),
 
             0xff10..=0xff3f => self.apu.read(address),
@@ -86,7 +86,7 @@ impl MMU {
             // oam dma transfer - returns nothing.
             0xff46 => 0,
 
-            0xff40..=0xff4b => self.gpu.read(address),
+            0xff40..=0xff4b => self.ppu.read(address),
 
             0xff0f => 0xe0 | self.intf,
 
@@ -104,9 +104,9 @@ impl MMU {
     pub fn write_byte(&mut self, value: u8, address: u16) {
         match address {
             0x0000..=0x7fff => self.cartridge.write_rom(value, address),
-            0x8000..=0x9fff => self.gpu.write(value, address),
+            0x8000..=0x9fff => self.ppu.write(value, address),
             0xa000..=0xbfff => self.cartridge.write_ram(value, address),
-            0xfe00..=0xfe9f => self.gpu.write(value, address),
+            0xfe00..=0xfe9f => self.ppu.write(value, address),
             0xff00 => self.joypad.write(value),
 
             0xff10..=0xff3f => self.apu.write(value, address),
@@ -114,7 +114,7 @@ impl MMU {
             // call to start the OAM DMA transfer.
             0xff46 => self.oam_dma(value),
 
-            0xff40..=0xff4b => self.gpu.write(value, address),
+            0xff40..=0xff4b => self.ppu.write(value, address),
 
             0xff04..=0xff07 => self.timer.write(value, address),
 

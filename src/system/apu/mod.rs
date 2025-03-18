@@ -170,6 +170,7 @@ impl APU {
     }
 
     fn mix(&mut self) {
+        // ensures that they are of equal length
         let sc1 = self.ch1.blip.samples_avail();
         let sc2 = self.ch2.blip.samples_avail();
         let sc3 = self.ch3.blip.samples_avail();

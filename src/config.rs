@@ -26,14 +26,14 @@ pub struct Color {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Keybinds {
-    pub Up: String,
-    pub Down: String,
-    pub Left: String,
-    pub Right: String,
-    pub A: String,
-    pub B: String,
-    pub Start: String,
-    pub Select: String,
+    pub up: String,
+    pub down: String,
+    pub left: String,
+    pub right: String,
+    pub a: String,
+    pub b: String,
+    pub start: String,
+    pub select: String,
 }
 
 impl Config {
@@ -48,14 +48,14 @@ impl Config {
                 id3: [0x00, 0x00, 0x00], //
             },
             keybinds: Keybinds {
-                Up: "up".to_string(),
-                Down: "down".to_string(),
-                Left: "left".to_string(),
-                Right: "right".to_string(),
-                A: "z".to_string(),
-                B: "x".to_string(),
-                Start: "enter".to_string(),
-                Select: "shift".to_string(),
+                up: "up".to_string(),
+                down: "down".to_string(),
+                left: "left".to_string(),
+                right: "right".to_string(),
+                a: "z".to_string(),
+                b: "x".to_string(),
+                start: "enter".to_string(),
+                select: "shift".to_string(),
             },
         }
     }
@@ -112,21 +112,21 @@ impl Config {
     }
 
     pub fn get_input(&self, key: &String) -> Option<Input> {
-        if key == &self.keybinds.Up {
+        if key == &self.keybinds.up {
             Some(Input::Up)
-        } else if key == &self.keybinds.Down {
+        } else if key == &self.keybinds.down {
             Some(Input::Down)
-        } else if key == &self.keybinds.Left {
+        } else if key == &self.keybinds.left {
             Some(Input::Left)
-        } else if key == &self.keybinds.Right {
+        } else if key == &self.keybinds.right {
             Some(Input::Right)
-        } else if key == &self.keybinds.A {
+        } else if key == &self.keybinds.a {
             Some(Input::A)
-        } else if key == &self.keybinds.B {
+        } else if key == &self.keybinds.b {
             Some(Input::B)
-        } else if key == &self.keybinds.Select {
+        } else if key == &self.keybinds.select {
             Some(Input::Select)
-        } else if key == &self.keybinds.Start {
+        } else if key == &self.keybinds.start {
             Some(Input::Start)
         } else {
             None

@@ -97,7 +97,7 @@ impl Controller {
                         Ok(e) => {
                             self.emulator = Some(e);
                             self.player = if self.config.audio {
-                                CpalPlayer::new(self.emulator.as_ref().unwrap().audio_buffer())
+                                CpalPlayer::new(self.emulator.as_ref().unwrap().audio())
                             } else {
                                 None
                             };
@@ -198,7 +198,7 @@ impl Controller {
                                 }
                             }
                             self.player = if self.config.audio {
-                                CpalPlayer::new(self.emulator.as_ref().unwrap().audio_buffer())
+                                CpalPlayer::new(self.emulator.as_ref().unwrap().audio())
                             } else {
                                 None
                             };
@@ -259,7 +259,7 @@ impl Controller {
 
             match self.emulator {
                 Some(_) => {
-                    if self.emulator.as_mut().unwrap().updated() {
+                    if self.emulator.as_mut().unwrap().screen_updated() {
                         let draw_data = self.draw();
 
                         match sender.try_send(ControllerResponse::Draw(draw_data)) {

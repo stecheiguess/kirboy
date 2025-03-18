@@ -1,11 +1,9 @@
 use std::{collections::HashMap, hash::Hash};
 
-// TODO: Rewrite the entire class. Use Enums, for more self describing code, instead of an OOP approach, as I have enough of it in the code honestly.
-
 // Flag Register.
 
 #[derive(Copy, Clone, Debug)]
-pub struct FlagsRegister {
+pub struct FlagRegister {
     pub zero: bool,
     pub subtract: bool,
     pub half_carry: bool,
@@ -17,7 +15,7 @@ const SUBTRACT_FLAG_BYTE_POSITION: u8 = 6;
 const HALF_CARRY_FLAG_BYTE_POSITION: u8 = 5;
 const CARRY_FLAG_BYTE_POSITION: u8 = 4;
 
-impl FlagsRegister {
+impl FlagRegister {
     fn set(&mut self, v: u8) {
         self.zero = ((v >> ZERO_FLAG_BYTE_POSITION) & 0b1) != 0;
         self.subtract = ((v >> SUBTRACT_FLAG_BYTE_POSITION) & 0b1) != 0;
@@ -66,13 +64,13 @@ impl DoubleRegister {
 #[derive(Debug)]
 pub struct Registers {
     data: HashMap<Register, u8>,
-    pub f: FlagsRegister,
+    pub f: FlagRegister,
 }
 impl Registers {
     pub fn new() -> Self {
         Self {
             data: HashMap::new(),
-            f: FlagsRegister {
+            f: FlagRegister {
                 zero: false,
                 subtract: false,
                 half_carry: false,

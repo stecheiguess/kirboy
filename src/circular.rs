@@ -2,16 +2,16 @@ use std::fmt::Debug;
 
 #[derive(Clone, Debug)]
 
-pub struct CircularQueue<T> {
+pub struct Circular<T> {
     vec: Vec<Option<T>>,
     front: usize,
     size: usize,
     cap: usize,
 }
 
-impl<T: Clone + Debug> CircularQueue<T> {
-    pub fn new(cap: usize) -> CircularQueue<T> {
-        CircularQueue {
+impl<T: Clone + Debug> Circular<T> {
+    pub fn new(cap: usize) -> Circular<T> {
+        Circular {
             vec: vec![None; cap],
             front: 0,
             size: 0,
@@ -19,16 +19,15 @@ impl<T: Clone + Debug> CircularQueue<T> {
         }
     }
 
-    pub fn push(&mut self, entry: T) -> Result<(), &str> {
+    pub fn push(&mut self, entry: T) {
         if self.size == self.cap {
-            return Err("Queue is filled.");
+            self.pop();
+            //return Err("Queue is filled.");
         }
 
         self.size += 1;
         let rear = (self.front + self.size - 1) % self.cap;
         self.vec[rear] = Some(entry);
-
-        return Ok(());
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &T> {
