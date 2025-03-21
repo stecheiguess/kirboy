@@ -444,7 +444,7 @@ impl CPU {
 
             // push
 
-            // this fucking opcode got my value and address turned around
+            // this freaking opcode got my value and address turned around
             0x08 => {
                 let address = self.fetch_word();
                 self.mmu.write_word(self.sp, address);
@@ -576,6 +576,9 @@ impl CPU {
         };
     }
 
+    // Handles extended CB-prefixed instruction set.
+    // Functional decomposition separates extended ops from base set.
+    // State mutations isolated and explicit (Rust ownership model).
     fn execute_cb(&mut self) -> CPUState {
         let opcode = self.fetch();
         //println!("CB Opcode is: {:2X}", opcode);

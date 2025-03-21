@@ -219,6 +219,7 @@ pub struct Sweep {
     pub frequency: u16,
 }
 
+// Frequency Sweep Module
 impl Sweep {
     pub fn new() -> Self {
         Self {

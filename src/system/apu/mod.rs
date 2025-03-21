@@ -158,6 +158,7 @@ impl APU {
 
     fn play(&mut self, l: &[f32], r: &[f32]) {
         assert_eq!(l.len(), r.len());
+        // pushes generated audio into the audio_buffer.
         let mut buffer = self.buffer.lock().unwrap();
         for (l, r) in l.iter().zip(r) {
             // Do not fill the buffer with more than 1 second of data

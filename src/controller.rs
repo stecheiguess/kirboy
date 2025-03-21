@@ -13,7 +13,6 @@ pub enum ControllerRequest {
     Exit,
     LoadConfig,
     OpenConfig,
-    Save,
 }
 
 pub enum ControllerResponse {
@@ -284,6 +283,7 @@ impl Controller {
         receiver: Receiver<ControllerRequest>,
     ) {
         if self.config.debug {
+            // if the mode in config is debug, switch. otherwise use default.
             self.mode = ControllerMode::Debug;
         }
         match self.mode {

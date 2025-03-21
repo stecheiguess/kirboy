@@ -33,8 +33,6 @@ struct Locals {
 }
 @group(0) @binding(2) var<uniform> r_locals: Locals;
 
-const tau = 6.283185307179586476925286766559;
-
 fn hsv_to_rgb(c: vec3<f32>) -> vec3<f32> {
     /* stores all the needed constants into a single 4 float vector, using swizzling to 
     transform to needed values. */
@@ -46,11 +44,6 @@ fn hsv_to_rgb(c: vec3<f32>) -> vec3<f32> {
 
 fn remap(uv: vec2<f32>) -> vec2<f32> {
     return uv * vec2<f32>(cutout.width, cutout.height) + vec2<f32>(cutout.x, cutout.y);
-}
-
-fn reverse(uv:vec2<f32>) -> vec2<f32> {
-    return (uv -  vec2<f32>(cutout.x, cutout.y)) / vec2<f32>(cutout.width, cutout.height);
-
 }
 
 @fragment

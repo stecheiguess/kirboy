@@ -69,10 +69,13 @@ fn main() -> Result<(), Error> {
 
     // screen init.
 
+    // ControllerResponse receiver/sender
     let (output_sender, output_receiver): (
         SyncSender<ControllerResponse>,
         Receiver<ControllerResponse>,
     ) = sync_channel(2);
+
+    // ControllerRequest receiver/sender
     let (input_sender, input_receiver): (
         SyncSender<ControllerRequest>,
         Receiver<ControllerRequest>,
@@ -81,6 +84,7 @@ fn main() -> Result<(), Error> {
     let emulator_thread = thread::spawn(move || {
         // This thread runs the emulator loop
         let mut controller = Controller::new();
+        // sends the ControllerResponse sender for the Controller to push responses and the ControllerRequest Receiver to receive requests from the main thread.
         controller.run(output_sender, input_receiver);
         drop(controller);
     });
@@ -455,6 +459,7 @@ pub fn new_renderer(window: &Window, shader: Option<Shader>) -> (Pixels, Rendere
     return (pixels, renderer);
 }
 
+// converts the window Key Enums into a string standard, so that the frontend could be replaced without having a dependency on the controller itself.
 pub fn to_text<'a>(key: Key<'a>) -> Option<String> {
     let text = match key {
         Key::Character(ch) => ch,

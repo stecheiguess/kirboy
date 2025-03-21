@@ -35,8 +35,6 @@ struct Locals {
 }
 @group(0) @binding(2) var<uniform> r_locals: Locals;
 
-const tau = 6.283185307179586476925286766559;
-const one_over_root_two = 0.70710678118;
 
 fn hsv_to_rgb(c: vec3<f32>) -> vec3<f32> {
     let K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
@@ -49,15 +47,9 @@ fn remap(uv: vec2<f32>) -> vec2<f32> {
     return uv * vec2<f32>(cutout.width, cutout.height) + vec2<f32>(cutout.x, cutout.y);
 }
 
-fn reverse(uv:vec2<f32>) -> vec2<f32> {
-    return (uv -  vec2<f32>(cutout.x, cutout.y)) / vec2<f32>(cutout.width, cutout.height);
-
-}
-
 @fragment
 fn fs_main(@location(0) tex_coord: vec2<f32>) -> @location(0) vec4<f32> {
 
- // Speed of the rainbow cycling
     let color = textureSample(r_tex_color, r_tex_sampler, remap(tex_coord));
 
     // Create the green filter effect
@@ -67,8 +59,6 @@ fn fs_main(@location(0) tex_coord: vec2<f32>) -> @location(0) vec4<f32> {
     let filterx = vec3<f32>(0.3339, 0.3731, 0.0);
     let filter_color =  vec3<f32>(0.3039, 0.3431, 0.0);
     let filter_color2 = vec3<f32>(0.0263, 0.1063, 0.0);
-
-
 
 
     let pixel_coord = vec2<f32>(
@@ -92,15 +82,11 @@ fn fs_main(@location(0) tex_coord: vec2<f32>) -> @location(0) vec4<f32> {
     let distance = max(abs(from_center.x), abs(from_center.y));
 
     // Use smoothstep to adjust alpha based on distance from the center
-    //let alpha = 1.0 - smoothstep(0.0, one_over_root_two, distance);
 
     let filtered = vec3<f32>(avg * 0.5 + 0.25) * filterx;
 
     let shade = vec4<f32>((filterx), smoothstep(0., 0.9, (1. - distance)));
-
     
-    //let bright = (vec4<f32>(0.851, 0.961, 0.145, alpha));
-
     // Apply the custom color filte
 
 

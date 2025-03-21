@@ -22,7 +22,6 @@ impl<T: Clone + Debug> Circular<T> {
     pub fn push(&mut self, entry: T) {
         if self.size == self.cap {
             self.pop();
-            //return Err("Queue is filled.");
         }
 
         self.size += 1;
