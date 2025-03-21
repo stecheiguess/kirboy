@@ -1,4 +1,5 @@
 #![deny(clippy::all)]
+#![windows_subsystem = "windows"]
 //#![forbid(unsafe_code)]
 
 use controller::{Controller, ControllerRequest, ControllerResponse};
